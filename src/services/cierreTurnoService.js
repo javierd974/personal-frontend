@@ -4,32 +4,236 @@ import { registrosService } from './registrosService'
 import { valesService, ausenciasService } from './catalogosService'
 
 export const cierreTurnoService = {
+  // Identificar turno actual basado en cierres anteriores
+  async identificarTurnoActual(localId, fecha = null) {
+    try {
+      const fechaBusqueda = fecha || format(new Date(), 'yyyy-MM-dd')
+      const horaActual = new Date().getHours()
+      
+      // Si es antes de las 7 AM, no hay turno activo
+      if (horaActual < 7) {
+        return { turno: null, mensaje: 'Aún no es hora de abrir turno (antes de 7 AM)' }
+      }
+      
+      // Obtener cierres del día
+      const { data: cierres, error } = await supabase
+        .from('cierres_turno')
+        .select('turno, hora_cierre')
+        .eq('local_id', localId)
+        .eq('fecha', fechaBusqueda)
+        .order('hora_cierre', { ascending: true })
+      
+      if (error) throw error
+      
+      // Si no hay cierres, es el primer turno
+      if (!cierres || cierres.length === 0) {
+        return { turno: 'primer_turno', numero: 1, mensaje: 'Primer turno del día' }
+      }
+      
+      // Si ya hay un cierre, es el segundo turno
+      if (cierres.length === 1) {
+        return { turno: 'segundo_turno', numero: 2, mensaje: 'Segundo turno del día' }
+      }
+      
+      // Si ya hay dos cierres, no se pueden hacer más turnos ese día
+      if (cierres.length >= 2) {
+        return { turno: null, mensaje: 'Ya se cerraron los dos turnos del día' }
+      }
+      
+      return { turno: 'primer_turno', numero: 1, mensaje: 'Primer turno del día' }
+    } catch (error) {
+      console.error('Error al identificar turno:', error)
+      return { turno: 'primer_turno', numero: 1, mensaje: 'Primer turno del día (default)' }
+    }
+  },
+
+  // Obtener hora del último cierre del día
+  async getHoraUltimoCierre(localId, fecha) {
+    try {
+      const { data, error } = await supabase
+        .from('cierres_turno')
+        .select('hora_cierre')
+        .eq('local_id', localId)
+        .eq('fecha', fecha)
+        .order('hora_cierre', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      
+      if (error) throw error
+      return data?.hora_cierre || null
+    } catch (error) {
+      console.error('Error al obtener último cierre:', error)
+      return null
+    }
+  },
+
+  // Filtrar registros por turno (después del último cierre)
+  async filtrarPorTurnoSecuencial(registros, localId, fecha, turno) {
+    // Si es turno general o primer turno sin cierre previo, incluir todo
+    if (turno === 'general' || turno === 'primer_turno') {
+      const horaUltimoCierre = await this.getHoraUltimoCierre(localId, fecha)
+      
+      // Si no hay cierre previo, es el primer turno - incluir todo desde las 7 AM
+      if (!horaUltimoCierre) {
+        return registros.filter(r => {
+          if (!r.hora_entrada) return false
+          const horaEntrada = r.hora_entrada.substring(0, 5)
+          return horaEntrada >= '07:00'
+        })
+      }
+      
+      // Si hay cierre previo y es segundo turno, incluir solo después del cierre
+      const horaCierre = new Date(horaUltimoCierre).toLocaleTimeString('en-US', {
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+      
+      return registros.filter(r => {
+        if (!r.hora_entrada) return false
+        const horaEntrada = r.hora_entrada.substring(0, 5)
+        return horaEntrada > horaCierre
+      })
+    }
+    
+    return registros
+  },
+
+  // Filtrar vales por turno secuencial
+  async filtrarValesPorTurno(vales, localId, fecha, turno) {
+    if (turno === 'general') return vales
+    
+    const horaUltimoCierre = await this.getHoraUltimoCierre(localId, fecha)
+    
+    // Primer turno: desde las 7 AM (o desde inicio del día si no hay cierre previo)
+    if (!horaUltimoCierre) {
+      return vales.filter(v => {
+        if (!v.created_at) return true
+        const horaCreacion = new Date(v.created_at).toLocaleTimeString('en-US', {
+          hour12: false,
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+        return horaCreacion >= '07:00'
+      })
+    }
+    
+    // Segundo turno: después del cierre del primer turno
+    const horaCierre = new Date(horaUltimoCierre).toLocaleTimeString('en-US', {
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+    
+    return vales.filter(v => {
+      if (!v.created_at) return false
+      const horaCreacion = new Date(v.created_at).toLocaleTimeString('en-US', {
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+      return horaCreacion > horaCierre
+    })
+  },
+
+  // Filtrar ausencias por turno secuencial
+  async filtrarAusenciasPorTurno(ausencias, localId, fecha, turno) {
+    if (turno === 'general') return ausencias
+    
+    const horaUltimoCierre = await this.getHoraUltimoCierre(localId, fecha)
+    
+    if (!horaUltimoCierre) {
+      return ausencias.filter(a => {
+        if (!a.created_at) return true
+        const horaCreacion = new Date(a.created_at).toLocaleTimeString('en-US', {
+          hour12: false,
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+        return horaCreacion >= '07:00'
+      })
+    }
+    
+    const horaCierre = new Date(horaUltimoCierre).toLocaleTimeString('en-US', {
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+    
+    return ausencias.filter(a => {
+      if (!a.created_at) return false
+      const horaCreacion = new Date(a.created_at).toLocaleTimeString('en-US', {
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+      return horaCreacion > horaCierre
+    })
+  },
+
   // Generar datos para el reporte de cierre de turno
   async generarDatosCierre(localId, fecha = null, turno = 'general') {
     try {
       const fechaBusqueda = fecha || format(new Date(), 'yyyy-MM-dd')
       
+      // Obtener información del turno actual
+      const infoTurno = await this.identificarTurnoActual(localId, fechaBusqueda)
+      
       // Obtener registros del día
       const registrosResult = await registrosService.getRegistrosDelDia(localId, fechaBusqueda)
       if (!registrosResult.success) throw new Error(registrosResult.error)
+      
+      // FILTRAR registros por turno secuencial
+      const registrosFiltrados = await this.filtrarPorTurnoSecuencial(
+        registrosResult.data, 
+        localId, 
+        fechaBusqueda, 
+        infoTurno.turno || turno
+      )
       
       // Obtener vales del día
       const valesResult = await valesService.getValesDelDia(localId, fechaBusqueda)
       if (!valesResult.success) throw new Error(valesResult.error)
       
-      // Obtener total de vales
-      const totalValesResult = await valesService.getTotalValesDelDia(localId, fechaBusqueda)
-      if (!totalValesResult.success) throw new Error(totalValesResult.error)
+      // FILTRAR vales por turno secuencial
+      const valesFiltrados = await this.filtrarValesPorTurno(
+        valesResult.data,
+        localId,
+        fechaBusqueda,
+        infoTurno.turno || turno
+      )
+      
+      // Calcular total de vales FILTRADOS
+      const totalValesFiltrados = valesFiltrados.reduce((sum, vale) => {
+        const importeCentavos = Math.round(parseFloat(vale.importe) * 100)
+        return sum + importeCentavos
+      }, 0) / 100
       
       // Obtener ausencias del día
       const ausenciasResult = await ausenciasService.getAusenciasDelDia(localId, fechaBusqueda)
       if (!ausenciasResult.success) throw new Error(ausenciasResult.error)
       
+      // FILTRAR ausencias por turno secuencial
+      const ausenciasFiltradas = await this.filtrarAusenciasPorTurno(
+        ausenciasResult.data,
+        localId,
+        fechaBusqueda,
+        infoTurno.turno || turno
+      )
+      
+      // Obtener hora del último cierre (si existe)
+      const horaUltimoCierre = await this.getHoraUltimoCierre(localId, fechaBusqueda)
+      
       // Formatear datos del reporte
       const reporte = {
         fecha: fechaBusqueda,
-        turno: turno,
-        personal: registrosResult.data.map(registro => ({
+        turno: infoTurno.turno || turno,
+        numeroTurno: infoTurno.numero || null,
+        mensajeTurno: infoTurno.mensaje,
+        horaInicio: horaUltimoCierre ? 
+          new Date(horaUltimoCierre).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : 
+          '07:00',
+        personal: registrosFiltrados.map(registro => ({
           id: registro.id,
           empleado: `${registro.empleado.nombre} ${registro.empleado.apellido}`,
           documento: registro.empleado.documento,
@@ -38,23 +242,24 @@ export const cierreTurnoService = {
           horaSalida: registro.hora_salida || 'EN TURNO',
           observaciones: registro.observaciones
         })),
-        vales: valesResult.data.map(vale => ({
+        vales: valesFiltrados.map(vale => ({
           id: vale.id,
           empleado: `${vale.empleado.nombre} ${vale.empleado.apellido}`,
           importe: parseFloat(vale.importe),
+          motivo: vale.motivo?.motivo || vale.concepto,
           concepto: vale.concepto
         })),
-        totalVales: totalValesResult.total,
-        cantidadVales: totalValesResult.cantidad,
-        ausencias: ausenciasResult.data.map(ausencia => ({
+        totalVales: totalValesFiltrados,
+        cantidadVales: valesFiltrados.length,
+        ausencias: ausenciasFiltradas.map(ausencia => ({
           id: ausencia.id,
           empleado: `${ausencia.empleado.nombre} ${ausencia.empleado.apellido}`,
           motivo: ausencia.motivo.motivo,
           observaciones: ausencia.observaciones
         })),
-        cantidadAusencias: ausenciasResult.data.length,
-        personalActivo: registrosResult.data.filter(r => !r.hora_salida).length,
-        personalFinalizado: registrosResult.data.filter(r => r.hora_salida).length
+        cantidadAusencias: ausenciasFiltradas.length,
+        personalActivo: registrosFiltrados.filter(r => !r.hora_salida).length,
+        personalFinalizado: registrosFiltrados.filter(r => r.hora_salida).length
       }
       
       return { success: true, data: reporte }

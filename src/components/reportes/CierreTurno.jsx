@@ -10,14 +10,20 @@ const CierreTurno = ({ localId, localNombre, onAlert }) => {
   const [loading, setLoading] = useState(false)
   const [datosReporte, setDatosReporte] = useState(null)
   const [observaciones, setObservaciones] = useState('')
-  const [turno, setTurno] = useState('general')
+  const [infoTurnoActual, setInfoTurnoActual] = useState(null)
   const [modalReporte, setModalReporte] = useState(false)
   const [reporteActual, setReporteActual] = useState(null)
   const [cierresAnteriores, setCierresAnteriores] = useState([])
 
   useEffect(() => {
     cargarCierresAnteriores()
+    cargarInfoTurno()
   }, [localId])
+
+  const cargarInfoTurno = async () => {
+    const info = await cierreTurnoService.identificarTurnoActual(localId)
+    setInfoTurnoActual(info)
+  }
 
   const cargarCierresAnteriores = async () => {
     const result = await cierreTurnoService.getCierres(localId)
@@ -27,9 +33,14 @@ const CierreTurno = ({ localId, localNombre, onAlert }) => {
   }
 
   const generarVistaPrevia = async () => {
+    if (!infoTurnoActual?.turno) {
+      onAlert({ type: 'error', message: infoTurnoActual?.mensaje || 'No se puede generar reporte en este momento' })
+      return
+    }
+
     setLoading(true)
     try {
-      const result = await cierreTurnoService.generarDatosCierre(localId, null, turno)
+      const result = await cierreTurnoService.generarDatosCierre(localId, null, infoTurnoActual.turno)
       
       if (result.success) {
         setDatosReporte(result.data)
@@ -54,7 +65,7 @@ const CierreTurno = ({ localId, localNombre, onAlert }) => {
       const result = await cierreTurnoService.cerrarTurno(
         localId,
         observaciones,
-        turno
+        infoTurnoActual.turno
       )
       
       if (result.success) {
@@ -62,6 +73,7 @@ const CierreTurno = ({ localId, localNombre, onAlert }) => {
         setDatosReporte(null)
         setObservaciones('')
         await cargarCierresAnteriores()
+        await cargarInfoTurno() // Recargar info del turno
       } else {
         onAlert({ type: 'error', message: result.error })
       }
@@ -187,21 +199,30 @@ Cerrado por: ${reporte.usuario?.nombre} ${reporte.usuario?.apellido}
       <div className="card">
         <h3 className="text-xl font-bold text-dark mb-4">Generar Cierre de Turno</h3>
         
-        <div className="space-y-4">
-          <div>
-            <label className="label">Tipo de Turno</label>
-            <select
-              value={turno}
-              onChange={(e) => setTurno(e.target.value)}
-              className="select-field"
-            >
-              <option value="general">General</option>
-              <option value="mañana">Mañana</option>
-              <option value="tarde">Tarde</option>
-              <option value="noche">Noche</option>
-            </select>
+        {/* Información del turno actual */}
+        {infoTurnoActual && (
+          <div className={`mb-4 p-4 rounded-lg ${
+            infoTurnoActual.turno ? 'bg-green-50 border border-green-200' : 'bg-yellow-50 border border-yellow-200'
+          }`}>
+            <div className="flex items-center gap-2">
+              {infoTurnoActual.turno ? (
+                <CheckCircle className="w-5 h-5 text-green-600" />
+              ) : (
+                <AlertCircle className="w-5 h-5 text-yellow-600" />
+              )}
+              <div>
+                <p className={`font-medium ${infoTurnoActual.turno ? 'text-green-900' : 'text-yellow-900'}`}>
+                  {infoTurnoActual.turno ? `Turno ${infoTurnoActual.numero}` : 'Sin turno activo'}
+                </p>
+                <p className={`text-sm ${infoTurnoActual.turno ? 'text-green-700' : 'text-yellow-700'}`}>
+                  {infoTurnoActual.mensaje}
+                </p>
+              </div>
+            </div>
           </div>
-
+        )}
+        
+        <div className="space-y-4">
           <div>
             <label className="label">Observaciones Generales del Turno</label>
             <textarea
@@ -217,7 +238,7 @@ Cerrado por: ${reporte.usuario?.nombre} ${reporte.usuario?.apellido}
             <button
               onClick={generarVistaPrevia}
               className="btn-outline flex items-center space-x-2 flex-1"
-              disabled={loading}
+              disabled={loading || !infoTurnoActual?.turno}
             >
               <Eye className="w-5 h-5" />
               <span>Vista Previa</span>
@@ -227,7 +248,7 @@ Cerrado por: ${reporte.usuario?.nombre} ${reporte.usuario?.apellido}
               <button
                 onClick={confirmarCierre}
                 className="btn-primary flex items-center space-x-2 flex-1"
-                disabled={loading}
+                disabled={loading || !infoTurnoActual?.turno}
               >
                 <CheckCircle className="w-5 h-5" />
                 <span>Confirmar Cierre</span>
@@ -256,6 +277,22 @@ Cerrado por: ${reporte.usuario?.nombre} ${reporte.usuario?.apellido}
           </div>
 
           <div className="bg-white rounded-lg p-6 space-y-6">
+            {/* Información del turno */}
+            {datosReporte.numeroTurno && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                <p className="text-sm font-medium text-blue-900">
+                  📅 Turno {datosReporte.numeroTurno} del día
+                  {datosReporte.horaInicio && ` - Desde las ${datosReporte.horaInicio}`}
+                </p>
+                <p className="text-xs text-blue-700 mt-1">
+                  {datosReporte.numeroTurno === 1 
+                    ? 'Primer turno: incluye registros desde las 7:00 AM'
+                    : 'Segundo turno: incluye registros desde el cierre del turno anterior'
+                  }
+                </p>
+              </div>
+            )}
+
             {/* Resumen */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-primary/10 rounded-lg p-4">
@@ -268,7 +305,7 @@ Cerrado por: ${reporte.usuario?.nombre} ${reporte.usuario?.apellido}
 
               <div className="bg-secondary/10 rounded-lg p-4">
                 <p className="text-sm text-gray-600 mb-1">Vales de Caja</p>
-                <p className="text-2xl font-bold text-secondary">${datosReporte.totalVales.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-secondary">${Math.round(datosReporte.totalVales).toLocaleString('es-AR')}</p>
                 <p className="text-xs text-gray-500">{datosReporte.cantidadVales} vales</p>
               </div>
 
