@@ -1,0 +1,181 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #F9FAFB;
+}
+
+@layer components {
+  /* Botones */
+  .btn-primary {
+    @apply bg-primary hover:bg-primary-dark text-white font-medium py-3 px-6 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md;
+  }
+
+  .btn-secondary {
+    @apply bg-secondary hover:bg-secondary-dark text-white font-medium py-3 px-6 rounded-lg transition-colors duration-200 shadow-sm hover:shadow-md;
+  }
+
+  .btn-outline {
+    @apply border-2 border-primary text-primary hover:bg-primary hover:text-white font-medium py-3 px-6 rounded-lg transition-all duration-200;
+  }
+
+  .btn-danger {
+    @apply border-2 border-red-500 text-red-500 hover:bg-red-500 hover:text-white font-medium py-3 px-6 rounded-lg transition-all duration-200;
+  }
+
+  .btn-icon {
+    @apply p-2 text-primary hover:bg-primary/10 rounded-lg transition-colors duration-200;
+  }
+
+  /* Inputs */
+  .input-field {
+    @apply w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-gray-700 bg-white;
+  }
+
+  .input-error {
+    @apply border-red-500 focus:ring-red-500;
+  }
+
+  /* Cards */
+  .card {
+    @apply bg-white rounded-xl shadow-md p-6;
+  }
+
+  .card-hover {
+    @apply bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow duration-200;
+  }
+
+  /* Badges */
+  .badge {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-sm font-medium;
+  }
+
+  .badge-success {
+    @apply bg-green-100 text-green-800;
+  }
+
+  .badge-warning {
+    @apply bg-yellow-100 text-yellow-800;
+  }
+
+  .badge-error {
+    @apply bg-red-100 text-red-800;
+  }
+
+  .badge-info {
+    @apply bg-blue-100 text-blue-800;
+  }
+
+  .badge-primary {
+    @apply bg-primary/10 text-primary;
+  }
+
+  /* Alerts */
+  .alert {
+    @apply p-4 rounded-lg border-l-4;
+  }
+
+  .alert-success {
+    @apply bg-green-50 border-green-500 text-green-700;
+  }
+
+  .alert-error {
+    @apply bg-red-50 border-red-500 text-red-700;
+  }
+
+  .alert-warning {
+    @apply bg-yellow-50 border-yellow-500 text-yellow-700;
+  }
+
+  .alert-info {
+    @apply bg-blue-50 border-blue-500 text-blue-700;
+  }
+
+  /* Select personalizado */
+  .select-field {
+    @apply w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-gray-700 bg-white cursor-pointer;
+  }
+
+  /* Label */
+  .label {
+    @apply block text-sm font-medium text-gray-700 mb-2;
+  }
+
+  /* Contenedor de página */
+  .page-container {
+    @apply min-h-screen bg-gray-50 p-4 md:p-6 lg:p-8;
+  }
+
+  /* Header de sección */
+  .section-header {
+    @apply flex items-center justify-between mb-6;
+  }
+
+  /* Skeleton loading */
+  .skeleton {
+    @apply animate-pulse bg-gray-200 rounded;
+  }
+
+  /* Divider */
+  .divider {
+    @apply border-t border-gray-200 my-6;
+  }
+}
+
+/* Animación de entrada/salida */
+@keyframes slideIn {
+  from {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+/* Scrollbar personalizado */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #0B9FD9;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #0883B8;
+}
+
+/* Transitions suaves */
+* {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* Footer de marca */
+.smartdom-footer {
+  @apply text-center text-gray-600 text-sm py-4 border-t border-gray-200 mt-8;
+}
