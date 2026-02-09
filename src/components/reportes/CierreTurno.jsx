@@ -6,7 +6,7 @@ import Modal from '../common/Modal'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
-const CierreTurno = ({ localId, localNombre, onAlert }) => {
+const CierreTurno = ({ localId, localNombre, onAlert, onCierreExitoso }) => {
   const [loading, setLoading] = useState(false)
   const [datosReporte, setDatosReporte] = useState(null)
   const [observaciones, setObservaciones] = useState('')
@@ -74,6 +74,11 @@ const CierreTurno = ({ localId, localNombre, onAlert }) => {
         setObservaciones('')
         await cargarCierresAnteriores()
         await cargarInfoTurno() // Recargar info del turno
+        
+        // Notificar al Dashboard que se cerró el turno
+        if (onCierreExitoso) {
+          onCierreExitoso()
+        }
       } else {
         onAlert({ type: 'error', message: result.error })
       }
@@ -118,77 +123,95 @@ const CierreTurno = ({ localId, localNombre, onAlert }) => {
 
   const generarContenidoReporte = (reporte) => {
     const datos = reporte.reporte_json || reporte
+    const ancho = 42 // Caracteres por línea en 80mm
+    
+    // Función para centrar texto
+    const centrar = (texto) => {
+      const espacios = Math.max(0, Math.floor((ancho - texto.length) / 2))
+      return ' '.repeat(espacios) + texto
+    }
+    
+    // Función para línea separadora
+    const linea = (char = '-') => char.repeat(ancho)
+    
+    // Función para formatear precio sin decimales
+    const formatoPrecio = (valor) => {
+      return `$${Math.round(valor).toLocaleString('es-AR')}`
+    }
     
     let contenido = `
-╔════════════════════════════════════════════════════════╗
-║           REPORTE DE CIERRE DE TURNO                  ║
-║                    SmartDom                            ║
-╚════════════════════════════════════════════════════════╝
+${centrar('═══════════════════════════════════')}
+${centrar('CIERRE DE TURNO')}
+${centrar('SmartDom')}
+${centrar('═══════════════════════════════════')}
 
-Local: ${localNombre}
-Fecha: ${format(new Date(datos.fecha), "dd 'de' MMMM 'de' yyyy", { locale: es })}
-Turno: ${datos.turno.toUpperCase()}
-Hora de Cierre: ${format(new Date(reporte.hora_cierre), 'HH:mm')}
+${centrar(localNombre.toUpperCase())}
+${centrar(format(new Date(datos.fecha), "dd/MM/yyyy", { locale: es }))}
+${centrar(`Turno ${datos.numeroTurno || ''} - ${datos.turno}`)}
+${centrar(`Cierre: ${format(new Date(reporte.hora_cierre), 'HH:mm')}`)}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${linea('=')}
 
 PERSONAL EN TURNO
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${linea()}
+Total: ${datos.personal.length} | Activos: ${datos.personalActivo} | Finalizados: ${datos.personalFinalizado}
 
-Total de Personal: ${datos.personal.length}
-En Turno: ${datos.personalActivo}
-Finalizados: ${datos.personalFinalizado}
+${datos.personal.map((p, i) => {
+  const entrada = p.horaEntrada.includes('T') ? 
+    format(new Date(p.horaEntrada), 'HH:mm') : 
+    p.horaEntrada.substring(0, 5)
+  const salida = p.horaSalida === 'EN TURNO' ? 
+    'EN TURNO' : 
+    p.horaSalida.includes('T') ? 
+      format(new Date(p.horaSalida), 'HH:mm') : 
+      p.horaSalida.substring(0, 5)
+  
+  return `${i + 1}. ${p.empleado}
+   ${p.rol}
+   E: ${entrada} | S: ${salida}${p.observaciones ? `
+   Obs: ${p.observaciones}` : ''}`
+}).join('\n\n')}
 
-${datos.personal.map((p, i) => `
-${i + 1}. ${p.empleado}
-   Documento: ${p.documento}
-   Rol: ${p.rol}
-   Entrada: ${format(new Date(p.horaEntrada), 'HH:mm')}
-   Salida: ${p.horaSalida === 'EN TURNO' ? 'EN TURNO' : format(new Date(p.horaSalida), 'HH:mm')}
-   ${p.observaciones ? `Obs: ${p.observaciones}` : ''}
-`).join('')}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${linea('=')}
 
 VALES DE CAJA
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${linea()}
+Cantidad: ${datos.cantidadVales}
+TOTAL: ${formatoPrecio(datos.totalVales)}
 
-Cantidad de Vales: ${datos.cantidadVales}
-Total en Vales: $${datos.totalVales.toFixed(2)}
+${datos.vales.length > 0 ? datos.vales.map((v, i) => {
+  return `${i + 1}. ${v.empleado}
+   ${formatoPrecio(v.importe)} - ${v.motivo || v.concepto || 'Sin concepto'}`
+}).join('\n\n') : 'Sin vales registrados'}
 
-${datos.vales.length > 0 ? datos.vales.map((v, i) => `
-${i + 1}. ${v.empleado}
-   Importe: $${v.importe.toFixed(2)}
-   Concepto: ${v.concepto || 'N/A'}
-`).join('') : 'No se registraron vales en este turno.'}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${linea('=')}
 
 AUSENCIAS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${linea()}
+Total: ${datos.cantidadAusencias}
 
-Total de Ausencias: ${datos.cantidadAusencias}
+${datos.ausencias.length > 0 ? datos.ausencias.map((a, i) => {
+  return `${i + 1}. ${a.empleado}
+   ${a.motivo}${a.observaciones ? `
+   Obs: ${a.observaciones}` : ''}`
+}).join('\n\n') : 'Sin ausencias registradas'}
 
-${datos.ausencias.length > 0 ? datos.ausencias.map((a, i) => `
-${i + 1}. ${a.empleado}
-   Motivo: ${a.motivo}
-   ${a.observaciones ? `Obs: ${a.observaciones}` : ''}
-`).join('') : 'No se registraron ausencias en este turno.'}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${linea('=')}
 
 OBSERVACIONES GENERALES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
+${linea()}
 ${reporte.observaciones_generales || 'Sin observaciones'}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${linea('=')}
 
 Cerrado por: ${reporte.usuario?.nombre} ${reporte.usuario?.apellido}
 
-╔════════════════════════════════════════════════════════╗
-║              Desarrollado por SmartDom                 ║
-╚════════════════════════════════════════════════════════╝
+${centrar('─────────────────────────')}
+${centrar('Desarrollado por SmartDom')}
+${centrar('smartdom.io')}
+${centrar('─────────────────────────')}
+
+
 `
     return contenido
   }

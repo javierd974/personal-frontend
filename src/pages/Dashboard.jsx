@@ -114,6 +114,14 @@ const Dashboard = () => {
     }
   }
 
+  // Función para limpiar dashboard después de cerrar turno
+  const handleCierreExitoso = async () => {
+    // Recargar resumen para actualizar datos
+    await cargarResumenLocal()
+    // Cerrar modal de cierre
+    setVistaActual('registros')
+  }
+
   // Funciones para abrir modales con detalle
   const abrirModalPersonal = () => {
     setModalPersonal(true)
@@ -325,56 +333,45 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Navegación de vistas */}
-        <div className="bg-white rounded-xl shadow-md mb-6">
-          <div className="flex border-b border-gray-200">
-            <button
-              onClick={() => setVistaActual('registros')}
-              className={`flex-1 px-6 py-4 font-medium transition-colors ${
-                vistaActual === 'registros'
-                  ? 'text-primary border-b-2 border-primary'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <div className="flex items-center justify-center space-x-2">
-                <UserPlus className="w-5 h-5" />
-                <span>Control de Horarios</span>
-              </div>
-            </button>
+        {/* Vista única - Control de Horarios */}
+        {localActual && (
+          <RegistroHorarios 
+            localId={localActual.id}
+            onUpdate={cargarResumenLocal}
+            onAlert={setAlert}
+          />
+        )}
+
+        {/* Botón rojo prominente de Cierre de Turno */}
+        {localActual && vistaActual === 'registros' && (
+          <div className="card bg-red-50 border-2 border-red-300 mt-6">
             <button
               onClick={() => setVistaActual('cierre')}
-              className={`flex-1 px-6 py-4 font-medium transition-colors ${
-                vistaActual === 'cierre'
-                  ? 'text-primary border-b-2 border-primary'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
+              className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-6 px-6 rounded-lg transition-colors flex items-center justify-center gap-3 shadow-lg text-xl"
             >
-              <div className="flex items-center justify-center space-x-2">
-                <FileText className="w-5 h-5" />
-                <span>Cierre de Turno</span>
-              </div>
+              <FileText className="w-8 h-8" />
+              <span>CIERRE DE TURNO</span>
             </button>
+            <p className="text-sm text-red-700 text-center mt-3">
+              Presiona aquí para generar el reporte y cerrar el turno actual
+            </p>
           </div>
-        </div>
+        )}
 
-        {/* Vista actual */}
-        {localActual && (
-          <div>
-            {vistaActual === 'registros' && (
-              <RegistroHorarios 
-                localId={localActual.id}
-                onUpdate={cargarResumenLocal}
-                onAlert={setAlert}
-              />
-            )}
-            {vistaActual === 'cierre' && (
-              <CierreTurno 
-                localId={localActual.id}
-                localNombre={localActual.nombre}
-                onAlert={setAlert}
-              />
-            )}
-          </div>
+        {/* Modal de Cierre de Turno */}
+        {vistaActual === 'cierre' && localActual && (
+          <Modal
+            isOpen={true}
+            onClose={() => setVistaActual('registros')}
+            title="Cierre de Turno"
+          >
+            <CierreTurno 
+              localId={localActual.id}
+              localNombre={localActual.nombre}
+              onAlert={setAlert}
+              onCierreExitoso={handleCierreExitoso}
+            />
+          </Modal>
         )}
       </main>
 

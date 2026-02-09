@@ -53,9 +53,9 @@ export const valesService = {
       const { data, error } = await supabase
         .from('vales_caja')
         .insert({
-          local_id: valeData.localId,
-          empleado_id: valeData.empleadoId,
-          motivo_id: valeData.motivoId,
+          local_id: valeData.local_id,
+          empleado_id: valeData.empleado_id,
+          motivo_id: valeData.motivo_id,
           fecha: valeData.fecha || format(new Date(), 'yyyy-MM-dd'),
           importe: valeData.importe,
           concepto: valeData.concepto || null,
@@ -76,12 +76,22 @@ export const valesService = {
     }
   },
 
-  // Obtener vales del día por local
+  // Obtener vales del día por local (del turno actual)
   async getValesDelDia(localId, fecha = null) {
     try {
       const fechaBusqueda = fecha || format(new Date(), 'yyyy-MM-dd')
       
-      const { data, error } = await supabase
+      // Obtener hora del último cierre
+      const { data: ultimoCierre } = await supabase
+        .from('cierres_turno')
+        .select('hora_cierre')
+        .eq('local_id', localId)
+        .eq('fecha', fechaBusqueda)
+        .order('numero_turno', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      
+      let query = supabase
         .from('vales_caja')
         .select(`
           *,
@@ -90,7 +100,13 @@ export const valesService = {
         `)
         .eq('local_id', localId)
         .eq('fecha', fechaBusqueda)
-        .order('created_at', { ascending: false })
+      
+      // Si hay un cierre previo, solo mostrar vales posteriores
+      if (ultimoCierre) {
+        query = query.gt('created_at', ultimoCierre.hora_cierre)
+      }
+      
+      const { data, error } = await query.order('created_at', { ascending: false })
       
       if (error) throw error
       
@@ -100,16 +116,33 @@ export const valesService = {
     }
   },
 
-  // Obtener total de vales del día
+  // Obtener total de vales del día (del turno actual)
   async getTotalValesDelDia(localId, fecha = null) {
     try {
       const fechaBusqueda = fecha || format(new Date(), 'yyyy-MM-dd')
       
-      const { data, error } = await supabase
+      // Obtener hora del último cierre
+      const { data: ultimoCierre } = await supabase
+        .from('cierres_turno')
+        .select('hora_cierre')
+        .eq('local_id', localId)
+        .eq('fecha', fechaBusqueda)
+        .order('numero_turno', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      
+      let query = supabase
         .from('vales_caja')
         .select('importe')
         .eq('local_id', localId)
         .eq('fecha', fechaBusqueda)
+      
+      // Si hay un cierre previo, solo contar vales posteriores
+      if (ultimoCierre) {
+        query = query.gt('created_at', ultimoCierre.hora_cierre)
+      }
+      
+      const { data, error } = await query
       
       if (error) throw error
       
@@ -154,10 +187,10 @@ export const ausenciasService = {
       const { data, error } = await supabase
         .from('ausencias')
         .insert({
-          empleado_id: ausenciaData.empleadoId,
-          local_id: ausenciaData.localId,
+          empleado_id: ausenciaData.empleado_id,
+          local_id: ausenciaData.local_id,
           fecha: ausenciaData.fecha || format(new Date(), 'yyyy-MM-dd'),
-          motivo_id: ausenciaData.motivoId,
+          motivo_id: ausenciaData.motivo_id,
           observaciones: ausenciaData.observaciones,
           registrado_por: user.id
         })
@@ -176,12 +209,22 @@ export const ausenciasService = {
     }
   },
 
-  // Obtener ausencias del día
+  // Obtener ausencias del día (del turno actual)
   async getAusenciasDelDia(localId, fecha = null) {
     try {
       const fechaBusqueda = fecha || format(new Date(), 'yyyy-MM-dd')
       
-      const { data, error } = await supabase
+      // Obtener hora del último cierre
+      const { data: ultimoCierre } = await supabase
+        .from('cierres_turno')
+        .select('hora_cierre')
+        .eq('local_id', localId)
+        .eq('fecha', fechaBusqueda)
+        .order('numero_turno', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      
+      let query = supabase
         .from('ausencias')
         .select(`
           *,
@@ -190,7 +233,13 @@ export const ausenciasService = {
         `)
         .eq('local_id', localId)
         .eq('fecha', fechaBusqueda)
-        .order('created_at', { ascending: false })
+      
+      // Si hay un cierre previo, solo mostrar ausencias posteriores
+      if (ultimoCierre) {
+        query = query.gt('created_at', ultimoCierre.hora_cierre)
+      }
+      
+      const { data, error } = await query.order('created_at', { ascending: false })
       
       if (error) throw error
       
