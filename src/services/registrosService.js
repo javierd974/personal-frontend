@@ -2,7 +2,7 @@ import { supabase, handleSupabaseError, getCurrentUser } from './supabase'
 import { format } from 'date-fns'
 
 export const registrosService = {
-  // NUEVO: Obtener fecha del turno activo (considera turnos que cruzan medianoche)
+  // Obtener fecha del turno activo (considera turnos que cruzan medianoche)
   async getFechaTurnoActivo(localId) {
     try {
       const ahora = new Date()
@@ -108,7 +108,7 @@ export const registrosService = {
     }
   },
 
-  // MODIFICADO: Obtener registros del turno activo (no solo del día)
+  // CORREGIDO: Obtener registros del turno activo con filtro de cierre mejorado
   async getRegistrosDelDia(localId, fecha = null) {
     try {
       let fechaBusqueda
@@ -119,16 +119,7 @@ export const registrosService = {
         fechaBusqueda = await this.getFechaTurnoActivo(localId)
       }
       
-      // CRÍTICO: Obtener el último cierre del local para esta fecha
-      const { data: ultimoCierre } = await supabase
-        .from('cierres_turno')
-        .select('hora_cierre')
-        .eq('local_id', localId)
-        .eq('fecha', fechaBusqueda)
-        .order('hora_cierre', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      
+      // Obtener registros de la fecha del turno
       let query = supabase
         .from('registros_horarios')
         .select(`
@@ -140,36 +131,42 @@ export const registrosService = {
         .eq('local_id', localId)
         .eq('fecha', fechaBusqueda)
       
-      // Si hay un cierre previo, solo mostrar registros posteriores al cierre
-      if (ultimoCierre) {
-        query = query.gt('hora_entrada', ultimoCierre.hora_cierre)
-      }
-      
-      const { data, error } = await query.order('hora_entrada', { ascending: false })
+      const { data: registros, error } = await query.order('hora_entrada', { ascending: false })
       
       if (error) throw error
       
-      return { success: true, data }
+      // FILTRO MEJORADO: Obtener último cierre y filtrar en JavaScript
+      const { data: ultimoCierre } = await supabase
+        .from('cierres_turno')
+        .select('hora_cierre')
+        .eq('local_id', localId)
+        .eq('fecha', fechaBusqueda)
+        .order('hora_cierre', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      
+      // Si hay cierre, filtrar registros POSTERIORES al cierre
+      if (ultimoCierre) {
+        const horaCierre = new Date(ultimoCierre.hora_cierre)
+        const registrosFiltrados = registros.filter(r => {
+          const horaEntrada = new Date(r.hora_entrada)
+          return horaEntrada > horaCierre
+        })
+        return { success: true, data: registrosFiltrados }
+      }
+      
+      return { success: true, data: registros }
     } catch (error) {
       return { success: false, error: handleSupabaseError(error) }
     }
   },
 
-  // MODIFICADO: Obtener empleados activos en turno (sin salida registrada)
+  // CORREGIDO: Obtener empleados activos en turno con filtro mejorado
   async getEmpleadosEnTurno(localId) {
     try {
       const fechaTurno = await this.getFechaTurnoActivo(localId)
       
-      // CRÍTICO: Buscar empleados sin salida en el turno actual (después del último cierre)
-      const { data: ultimoCierre } = await supabase
-        .from('cierres_turno')
-        .select('hora_cierre')
-        .eq('local_id', localId)
-        .eq('fecha', fechaTurno)
-        .order('hora_cierre', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      
+      // Obtener todos los registros sin salida de la fecha del turno
       let query = supabase
         .from('registros_horarios')
         .select(`
@@ -181,16 +178,31 @@ export const registrosService = {
         .eq('fecha', fechaTurno)
         .is('hora_salida', null)
       
-      // Si hay cierre previo, solo mostrar registros después del cierre
-      if (ultimoCierre) {
-        query = query.gt('hora_entrada', ultimoCierre.hora_cierre)
-      }
-      
-      const { data, error } = await query.order('hora_entrada', { ascending: true })
+      const { data: registros, error } = await query.order('hora_entrada', { ascending: true })
       
       if (error) throw error
       
-      return { success: true, data }
+      // FILTRO MEJORADO: Obtener último cierre y filtrar en JavaScript
+      const { data: ultimoCierre } = await supabase
+        .from('cierres_turno')
+        .select('hora_cierre')
+        .eq('local_id', localId)
+        .eq('fecha', fechaTurno)
+        .order('hora_cierre', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      
+      // Si hay cierre, filtrar registros POSTERIORES al cierre
+      if (ultimoCierre) {
+        const horaCierre = new Date(ultimoCierre.hora_cierre)
+        const registrosFiltrados = registros.filter(r => {
+          const horaEntrada = new Date(r.hora_entrada)
+          return horaEntrada > horaCierre
+        })
+        return { success: true, data: registrosFiltrados }
+      }
+      
+      return { success: true, data: registros }
     } catch (error) {
       return { success: false, error: handleSupabaseError(error) }
     }
