@@ -2,26 +2,6 @@ import { supabase, handleSupabaseError, getCurrentUser } from './supabase'
 import { format } from 'date-fns'
 
 export const registrosService = {
-  // NUEVO: Obtener fecha del turno activo (considera turnos que cruzan medianoche)
-  async getFechaTurnoActivo(localId) {
-    try {
-      const ahora = new Date()
-      const horaActual = ahora.getHours()
-      
-      // Si es antes de las 7 AM, el turno activo es del día anterior
-      if (horaActual < 7) {
-        const ayer = new Date(ahora)
-        ayer.setDate(ayer.getDate() - 1)
-        return format(ayer, 'yyyy-MM-dd')
-      }
-      
-      // Después de las 7 AM, es el día actual
-      return format(ahora, 'yyyy-MM-dd')
-    } catch (error) {
-      return format(new Date(), 'yyyy-MM-dd')
-    }
-  },
-
   // Registrar entrada de empleado
   async registrarEntrada(empleadoId, localId, rolId, observaciones = '') {
     try {
@@ -48,16 +28,13 @@ export const registrosService = {
         }
       }
       
-      // Usar la fecha del turno activo (puede ser día anterior si es madrugada)
-      const fechaTurno = await this.getFechaTurnoActivo(localId)
-      
       const { data, error } = await supabase
         .from('registros_horarios')
         .insert({
           empleado_id: empleadoId,
           local_id: localId,
           rol_id: rolId,
-          fecha: fechaTurno,
+          fecha: format(new Date(), 'yyyy-MM-dd'),
           hora_entrada: new Date().toISOString(),
           registrado_por_entrada: user.id,
           metodo_registro: 'manual',
@@ -108,28 +85,12 @@ export const registrosService = {
     }
   },
 
-  // MODIFICADO: Obtener registros del turno activo (no solo del día)
+  // Obtener registros del día actual por local
   async getRegistrosDelDia(localId, fecha = null) {
     try {
-      let fechaBusqueda
+      const fechaBusqueda = fecha || format(new Date(), 'yyyy-MM-dd')
       
-      if (fecha) {
-        fechaBusqueda = fecha
-      } else {
-        fechaBusqueda = await this.getFechaTurnoActivo(localId)
-      }
-      
-      // CRÍTICO: Obtener el último cierre del local para esta fecha
-      const { data: ultimoCierre } = await supabase
-        .from('cierres_turno')
-        .select('hora_cierre')
-        .eq('local_id', localId)
-        .eq('fecha', fechaBusqueda)
-        .order('hora_cierre', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      
-      let query = supabase
+      const { data, error } = await supabase
         .from('registros_horarios')
         .select(`
           *,
@@ -139,13 +100,7 @@ export const registrosService = {
         `)
         .eq('local_id', localId)
         .eq('fecha', fechaBusqueda)
-      
-      // Si hay un cierre previo, solo mostrar registros posteriores al cierre
-      if (ultimoCierre) {
-        query = query.gt('hora_entrada', ultimoCierre.hora_cierre)
-      }
-      
-      const { data, error } = await query.order('hora_entrada', { ascending: false })
+        .order('hora_entrada', { ascending: false })
       
       if (error) throw error
       
@@ -155,22 +110,12 @@ export const registrosService = {
     }
   },
 
-  // MODIFICADO: Obtener empleados activos en turno (sin salida registrada)
+  // Obtener empleados activos en turno (sin salida registrada)
   async getEmpleadosEnTurno(localId) {
     try {
-      const fechaTurno = await this.getFechaTurnoActivo(localId)
+      const fechaActual = format(new Date(), 'yyyy-MM-dd')
       
-      // CRÍTICO: Buscar empleados sin salida en el turno actual (después del último cierre)
-      const { data: ultimoCierre } = await supabase
-        .from('cierres_turno')
-        .select('hora_cierre')
-        .eq('local_id', localId)
-        .eq('fecha', fechaTurno)
-        .order('hora_cierre', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      
-      let query = supabase
+      const { data, error } = await supabase
         .from('registros_horarios')
         .select(`
           *,
@@ -178,15 +123,9 @@ export const registrosService = {
           rol:roles(nombre)
         `)
         .eq('local_id', localId)
-        .eq('fecha', fechaTurno)
+        .eq('fecha', fechaActual)
         .is('hora_salida', null)
-      
-      // Si hay cierre previo, solo mostrar registros después del cierre
-      if (ultimoCierre) {
-        query = query.gt('hora_entrada', ultimoCierre.hora_cierre)
-      }
-      
-      const { data, error } = await query.order('hora_entrada', { ascending: true })
+        .order('hora_entrada', { ascending: true })
       
       if (error) throw error
       

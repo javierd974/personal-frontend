@@ -1,22 +1,6 @@
 import { supabase, handleSupabaseError, getCurrentUser } from './supabase'
 import { format } from 'date-fns'
 
-// NUEVO: Helper para obtener fecha del turno activo
-const getFechaTurnoActivo = () => {
-  const ahora = new Date()
-  const horaActual = ahora.getHours()
-  
-  // Si es antes de las 7 AM, el turno activo es del día anterior
-  if (horaActual < 7) {
-    const ayer = new Date(ahora)
-    ayer.setDate(ayer.getDate() - 1)
-    return format(ayer, 'yyyy-MM-dd')
-  }
-  
-  // Después de las 7 AM, es el día actual
-  return format(ahora, 'yyyy-MM-dd')
-}
-
 export const localesService = {
   // Obtener locales del usuario actual
   async getLocalesUsuario() {
@@ -65,7 +49,6 @@ export const valesService = {
   async registrarVale(valeData) {
     try {
       const user = await getCurrentUser()
-      const fechaTurno = getFechaTurnoActivo()
       
       const { data, error } = await supabase
         .from('vales_caja')
@@ -73,7 +56,7 @@ export const valesService = {
           local_id: valeData.local_id,
           empleado_id: valeData.empleado_id,
           motivo_id: valeData.motivo_id,
-          fecha: fechaTurno,
+          fecha: valeData.fecha || format(new Date(), 'yyyy-MM-dd'),
           importe: valeData.importe,
           concepto: valeData.concepto || null,
           registrado_por: user.id
@@ -93,10 +76,10 @@ export const valesService = {
     }
   },
 
-  // MODIFICADO: Obtener vales del turno activo (no solo del día)
+  // Obtener vales del día por local (del turno actual)
   async getValesDelDia(localId, fecha = null) {
     try {
-      const fechaBusqueda = fecha || getFechaTurnoActivo()
+      const fechaBusqueda = fecha || format(new Date(), 'yyyy-MM-dd')
       
       // Obtener hora del último cierre
       const { data: ultimoCierre } = await supabase
@@ -104,7 +87,7 @@ export const valesService = {
         .select('hora_cierre')
         .eq('local_id', localId)
         .eq('fecha', fechaBusqueda)
-        .order('hora_cierre', { ascending: false })
+        .order('numero_turno', { ascending: false })
         .limit(1)
         .maybeSingle()
       
@@ -133,10 +116,10 @@ export const valesService = {
     }
   },
 
-  // MODIFICADO: Obtener total de vales del turno activo
+  // Obtener total de vales del día (del turno actual)
   async getTotalValesDelDia(localId, fecha = null) {
     try {
-      const fechaBusqueda = fecha || getFechaTurnoActivo()
+      const fechaBusqueda = fecha || format(new Date(), 'yyyy-MM-dd')
       
       // Obtener hora del último cierre
       const { data: ultimoCierre } = await supabase
@@ -144,7 +127,7 @@ export const valesService = {
         .select('hora_cierre')
         .eq('local_id', localId)
         .eq('fecha', fechaBusqueda)
-        .order('hora_cierre', { ascending: false })
+        .order('numero_turno', { ascending: false })
         .limit(1)
         .maybeSingle()
       
@@ -200,14 +183,13 @@ export const ausenciasService = {
   async registrarAusencia(ausenciaData) {
     try {
       const user = await getCurrentUser()
-      const fechaTurno = getFechaTurnoActivo()
       
       const { data, error } = await supabase
         .from('ausencias')
         .insert({
           empleado_id: ausenciaData.empleado_id,
           local_id: ausenciaData.local_id,
-          fecha: fechaTurno,
+          fecha: ausenciaData.fecha || format(new Date(), 'yyyy-MM-dd'),
           motivo_id: ausenciaData.motivo_id,
           observaciones: ausenciaData.observaciones,
           registrado_por: user.id
@@ -227,10 +209,10 @@ export const ausenciasService = {
     }
   },
 
-  // MODIFICADO: Obtener ausencias del turno activo
+  // Obtener ausencias del día (del turno actual)
   async getAusenciasDelDia(localId, fecha = null) {
     try {
-      const fechaBusqueda = fecha || getFechaTurnoActivo()
+      const fechaBusqueda = fecha || format(new Date(), 'yyyy-MM-dd')
       
       // Obtener hora del último cierre
       const { data: ultimoCierre } = await supabase
@@ -238,7 +220,7 @@ export const ausenciasService = {
         .select('hora_cierre')
         .eq('local_id', localId)
         .eq('fecha', fechaBusqueda)
-        .order('hora_cierre', { ascending: false })
+        .order('numero_turno', { ascending: false })
         .limit(1)
         .maybeSingle()
       
