@@ -4,15 +4,51 @@ import { registrosService } from './registrosService'
 import { valesService, ausenciasService } from './catalogosService'
 
 export const cierreTurnoService = {
-  // Identificar turno actual basado en cierres anteriores
+  // NUEVA FUNCIÓN: Validar horario de cierre según el turno
+  validarHorarioCierre(turno) {
+    const ahora = new Date()
+    const horaLocal = ahora.getHours()
+    const minutosLocal = ahora.getMinutes()
+    const horaDecimal = horaLocal + (minutosLocal / 60)
+    
+    // PRIMER TURNO: No puede cerrarse antes de las 17:00 (20:00 GMT)
+    if (turno === 'primer_turno') {
+      if (horaDecimal < 17) {
+        const horaFaltante = Math.floor(17 - horaDecimal)
+        const minutosFaltantes = Math.round((17 - horaDecimal - horaFaltante) * 60)
+        return {
+          valido: false,
+          mensaje: `El primer turno no puede cerrarse antes de las 17:00 hs. Faltan ${horaFaltante}h ${minutosFaltantes}m aproximadamente.`
+        }
+      }
+    }
+    
+    // SEGUNDO TURNO: No puede cerrarse antes de las 00:00 (03:00 GMT)
+    if (turno === 'segundo_turno') {
+      // Si es después de medianoche pero antes de las 3 AM, está bien (es madrugada del turno)
+      if (horaLocal >= 3 && horaLocal < 24) {
+        // Entre las 3 AM y las 23:59, verificar que no cierre antes de medianoche
+        const horaFaltante = 24 - Math.ceil(horaDecimal)
+        return {
+          valido: false,
+          mensaje: `El segundo turno no puede cerrarse antes de las 00:00 hs. Faltan aproximadamente ${horaFaltante} horas.`
+        }
+      }
+    }
+    
+    return { valido: true }
+  },
+
+  // MODIFICADO: Identificar turno actual basado en cierres anteriores con validaciones horarias
   async identificarTurnoActual(localId, fecha = null) {
     try {
       const fechaBusqueda = fecha || format(new Date(), 'yyyy-MM-dd')
-      const horaActual = new Date().getHours()
+      const ahora = new Date()
+      const horaActual = ahora.getHours()
       
-      // Si es antes de las 7 AM, no hay turno activo
-      if (horaActual < 7) {
-        return { turno: null, mensaje: 'Aún no es hora de abrir turno (antes de 7 AM)' }
+      // Si es antes de las 5 AM, no hay turno activo
+      if (horaActual < 5) {
+        return { turno: null, mensaje: 'Aún no es hora de abrir turno (antes de 5:00 AM)' }
       }
       
       // Obtener cierres del día
@@ -27,12 +63,19 @@ export const cierreTurnoService = {
       
       // Si no hay cierres, es el primer turno
       if (!cierres || cierres.length === 0) {
-        return { turno: 'primer_turno', numero: 1, mensaje: 'Primer turno del día' }
+        return { turno: 'primer_turno', numero: 1, mensaje: 'Primer turno del día (puede cerrarse después de las 17:00 hs)' }
       }
       
-      // Si ya hay un cierre, es el segundo turno
+      // Si ya hay un cierre del primer turno, verificar horario para segundo turno
       if (cierres.length === 1) {
-        return { turno: 'segundo_turno', numero: 2, mensaje: 'Segundo turno del día' }
+        // Verificar que ya pasaron las 17:00 para permitir segundo turno
+        if (horaActual < 17) {
+          return { 
+            turno: null, 
+            mensaje: 'El segundo turno solo puede iniciarse después de las 17:00 hs. El primer turno ya fue cerrado.' 
+          }
+        }
+        return { turno: 'segundo_turno', numero: 2, mensaje: 'Segundo turno del día (puede cerrarse después de las 00:00 hs)' }
       }
       
       // Si ya hay dos cierres, no se pueden hacer más turnos ese día
@@ -73,12 +116,12 @@ export const cierreTurnoService = {
     if (turno === 'general' || turno === 'primer_turno') {
       const horaUltimoCierre = await this.getHoraUltimoCierre(localId, fecha)
       
-      // Si no hay cierre previo, es el primer turno - incluir todo desde las 7 AM
+      // Si no hay cierre previo, es el primer turno - incluir todo desde las 5 AM
       if (!horaUltimoCierre) {
         return registros.filter(r => {
           if (!r.hora_entrada) return false
           const horaEntrada = r.hora_entrada.substring(0, 5)
-          return horaEntrada >= '07:00'
+          return horaEntrada >= '05:00'
         })
       }
       
@@ -105,7 +148,7 @@ export const cierreTurnoService = {
     
     const horaUltimoCierre = await this.getHoraUltimoCierre(localId, fecha)
     
-    // Primer turno: desde las 7 AM (o desde inicio del día si no hay cierre previo)
+    // Primer turno: desde las 5 AM (o desde inicio del día si no hay cierre previo)
     if (!horaUltimoCierre) {
       return vales.filter(v => {
         if (!v.created_at) return true
@@ -114,7 +157,7 @@ export const cierreTurnoService = {
           hour: '2-digit',
           minute: '2-digit'
         })
-        return horaCreacion >= '07:00'
+        return horaCreacion >= '05:00'
       })
     }
     
@@ -150,7 +193,7 @@ export const cierreTurnoService = {
           hour: '2-digit',
           minute: '2-digit'
         })
-        return horaCreacion >= '07:00'
+        return horaCreacion >= '05:00'
       })
     }
     
@@ -232,7 +275,7 @@ export const cierreTurnoService = {
         mensajeTurno: infoTurno.mensaje,
         horaInicio: horaUltimoCierre ? 
           new Date(horaUltimoCierre).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : 
-          '07:00',
+          '05:00',
         personal: registrosFiltrados.map(registro => ({
           id: registro.id,
           empleado: `${registro.empleado.nombre} ${registro.empleado.apellido}`,
@@ -268,11 +311,20 @@ export const cierreTurnoService = {
     }
   },
 
-  // Cerrar turno y guardar reporte
+  // MODIFICADO: Cerrar turno con validación horaria
   async cerrarTurno(localId, observacionesGenerales, turno = 'general', fecha = null) {
     try {
       const user = await getCurrentUser()
       const fechaCierre = fecha || format(new Date(), 'yyyy-MM-dd')
+      
+      // VALIDAR HORARIO DE CIERRE
+      const validacion = this.validarHorarioCierre(turno)
+      if (!validacion.valido) {
+        return { 
+          success: false, 
+          error: validacion.mensaje 
+        }
+      }
       
       // Generar datos del reporte
       const reporteResult = await this.generarDatosCierre(localId, fechaCierre, turno)

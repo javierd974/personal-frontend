@@ -8,14 +8,14 @@ export const registrosService = {
       const ahora = new Date()
       const horaActual = ahora.getHours()
       
-      // Si es antes de las 7 AM, el turno activo es del día anterior
-      if (horaActual < 7) {
+      // Si es antes de las 5 AM, el turno activo es del día anterior
+      if (horaActual < 5) {
         const ayer = new Date(ahora)
         ayer.setDate(ayer.getDate() - 1)
         return format(ayer, 'yyyy-MM-dd')
       }
       
-      // Después de las 7 AM, es el día actual
+      // Después de las 5 AM, es el día actual
       return format(ahora, 'yyyy-MM-dd')
     } catch (error) {
       return format(new Date(), 'yyyy-MM-dd')
