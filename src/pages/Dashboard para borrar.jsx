@@ -11,8 +11,7 @@ import {
   UserMinus,
   DollarSign,
   Settings,
-  X,
-  ClipboardList
+  X
 } from 'lucide-react'
 import { authService } from '../services/authService'
 import { localesService } from '../services/catalogosService'
@@ -22,8 +21,7 @@ import LoadingSpinner from '../components/common/LoadingSpinner'
 import Alert from '../components/common/Alert'
 import Modal from '../components/common/Modal'
 import RegistroHorarios from '../components/registros/RegistroHorarios'
-import CierreDia from '../components/reportes/CierreDia'
-import ReporteEstado from '../components/reportes/ReporteEstado'
+import CierreTurno from '../components/reportes/CierreTurno'
 
 const Dashboard = () => {
   const navigate = useNavigate()
@@ -38,13 +36,12 @@ const Dashboard = () => {
     ausencias: 0
   })
   const [alert, setAlert] = useState(null)
+  const [vistaActual, setVistaActual] = useState('registros') // 'registros' | 'cierre'
   
   // Estados para modales
   const [modalPersonal, setModalPersonal] = useState(false)
   const [modalVales, setModalVales] = useState(false)
   const [modalAusencias, setModalAusencias] = useState(false)
-  const [modalCierreDia, setModalCierreDia] = useState(false)
-  const [modalReporteEstado, setModalReporteEstado] = useState(false)
   const [detalleVales, setDetalleVales] = useState([])
   const [detalleAusencias, setDetalleAusencias] = useState([])
 
@@ -117,10 +114,12 @@ const Dashboard = () => {
     }
   }
 
-  // Función para limpiar dashboard después de cerrar día
+  // Función para limpiar dashboard después de cerrar turno
   const handleCierreExitoso = async () => {
+    // Recargar resumen para actualizar datos
     await cargarResumenLocal()
-    setModalCierreDia(false)
+    // Cerrar modal de cierre
+    setVistaActual('registros')
   }
 
   // Funciones para abrir modales con detalle
@@ -173,6 +172,7 @@ const Dashboard = () => {
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
+            {/* Título del sistema */}
             <div className="flex items-center space-x-4">
               <div>
                 <h1 className="text-xl font-bold text-dark">PERSONAL LOS NOTABLES</h1>
@@ -180,6 +180,7 @@ const Dashboard = () => {
               </div>
             </div>
 
+            {/* Usuario y selector de local */}
             <div className="flex items-center space-x-4">
               {/* Selector de local */}
               {locales.length > 0 && (
@@ -202,6 +203,7 @@ const Dashboard = () => {
                 </div>
               )}
 
+              {/* Información del usuario */}
               <div className="hidden md:block text-right">
                 <p className="text-sm font-medium text-dark">
                   {usuario?.nombre} {usuario?.apellido}
@@ -212,6 +214,7 @@ const Dashboard = () => {
                 )}
               </div>
 
+              {/* Botón de administración - Solo visible para administradores */}
               {usuario?.rol === 'administrador' && (
                 <button
                   onClick={() => navigate('/admin')}
@@ -222,6 +225,7 @@ const Dashboard = () => {
                 </button>
               )}
 
+              {/* Botón cerrar sesión */}
               <button
                 onClick={handleCerrarSesion}
                 className="p-2 text-gray-600 hover:text-primary hover:bg-gray-100 rounded-lg transition-colors"
@@ -249,6 +253,7 @@ const Dashboard = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Tarjetas de resumen */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          {/* Empleados en turno - CLICKEABLE */}
           <div 
             className="card hover:shadow-lg transition-all cursor-pointer hover:scale-105"
             onClick={abrirModalPersonal}
@@ -265,6 +270,7 @@ const Dashboard = () => {
             </div>
           </div>
 
+          {/* Total de vales - CLICKEABLE */}
           <div 
             className="card hover:shadow-lg transition-all cursor-pointer hover:scale-105"
             onClick={abrirModalVales}
@@ -284,6 +290,7 @@ const Dashboard = () => {
             </div>
           </div>
 
+          {/* Ausencias - CLICKEABLE */}
           <div 
             className="card hover:shadow-lg transition-all cursor-pointer hover:scale-105"
             onClick={abrirModalAusencias}
@@ -300,6 +307,7 @@ const Dashboard = () => {
             </div>
           </div>
 
+          {/* Fecha actual */}
           <div className="card hover:shadow-lg transition-shadow">
             <div className="flex items-center justify-between">
               <div>
@@ -325,7 +333,7 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Control de Horarios */}
+        {/* Vista única - Control de Horarios */}
         {localActual && (
           <RegistroHorarios 
             localId={localActual.id}
@@ -334,98 +342,165 @@ const Dashboard = () => {
           />
         )}
 
-        {/* Botones de Reportes */}
-        {localActual && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-            {/* Botón Reporte de Estado */}
-            <div className="card">
-              <button
-                onClick={() => setModalReporteEstado(true)}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-lg transition-colors flex items-center justify-center gap-3 shadow-lg"
-              >
-                <ClipboardList className="w-6 h-6" />
-                <span>REPORTE DE ESTADO</span>
-              </button>
-              <p className="text-sm text-gray-600 text-center mt-2">
-                Genera un reporte del estado actual para cambio de encargado
-              </p>
-            </div>
-
-            {/* Botón Cierre del Día */}
-            <div className="card bg-red-50 border-2 border-red-300">
-              <button
-                onClick={() => setModalCierreDia(true)}
-                className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-4 px-6 rounded-lg transition-colors flex items-center justify-center gap-3 shadow-lg"
-              >
-                <FileText className="w-6 h-6" />
-                <span>CIERRE DEL DÍA</span>
-              </button>
-              <p className="text-sm text-red-700 text-center mt-2">
-                Cierra el día de trabajo y reinicia los contadores
-              </p>
-            </div>
+        {/* Botón rojo prominente de Cierre de Turno */}
+        {localActual && vistaActual === 'registros' && (
+          <div className="card bg-red-50 border-2 border-red-300 mt-6">
+            <button
+              onClick={() => setVistaActual('cierre')}
+              className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-6 px-6 rounded-lg transition-colors flex items-center justify-center gap-3 shadow-lg text-xl"
+            >
+              <FileText className="w-8 h-8" />
+              <span>CIERRE DE TURNO</span>
+            </button>
+            <p className="text-sm text-red-700 text-center mt-3">
+              Presiona aquí para generar el reporte y cerrar el turno actual
+            </p>
           </div>
+        )}
+
+        {/* Modal de Cierre de Turno */}
+        {vistaActual === 'cierre' && localActual && (
+          <Modal
+            isOpen={true}
+            onClose={() => setVistaActual('registros')}
+            title="Cierre de Turno"
+          >
+            <CierreTurno 
+              localId={localActual.id}
+              localNombre={localActual.nombre}
+              onAlert={setAlert}
+              onCierreExitoso={handleCierreExitoso}
+            />
+          </Modal>
         )}
       </main>
 
-      {/* Modales */}
+      {/* Modales de detalle */}
+      
+      {/* Modal Personal en Turno */}
       <Modal
         isOpen={modalPersonal}
         onClose={() => setModalPersonal(false)}
         title="Personal en Turno"
       >
-        {/* ... contenido del modal personal ... */}
+        <div className="space-y-3">
+          {empleadosEnTurno.length === 0 ? (
+            <p className="text-gray-500 text-center py-4">No hay personal en turno</p>
+          ) : (
+            empleadosEnTurno.map((emp, index) => (
+              <div key={emp.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                    <span className="text-sm font-bold text-primary">{index + 1}</span>
+                  </div>
+                  <div>
+                    <p className="font-medium text-dark">
+                      {emp.empleado.nombre} {emp.empleado.apellido}
+                    </p>
+                    <p className="text-sm text-gray-600">{emp.rol.nombre}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-gray-600">Entrada</p>
+                  <p className="font-medium text-primary">{emp.hora_entrada}</p>
+                </div>
+              </div>
+            ))
+          )}
+          <div className="pt-3 border-t">
+            <p className="text-sm text-gray-600 text-center">
+              Total en turno: <span className="font-bold text-dark">{empleadosEnTurno.length}</span>
+            </p>
+          </div>
+        </div>
       </Modal>
 
+      {/* Modal Vales del Día */}
       <Modal
         isOpen={modalVales}
         onClose={() => setModalVales(false)}
         title="Vales del Día"
       >
-        {/* ... contenido del modal vales ... */}
+        <div className="space-y-3">
+          {detalleVales.length === 0 ? (
+            <p className="text-gray-500 text-center py-4">No hay vales registrados hoy</p>
+          ) : (
+            <>
+              {detalleVales.map((vale, index) => (
+                <div key={vale.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-3 flex-1">
+                    <div className="w-8 h-8 bg-secondary/10 rounded-full flex items-center justify-center">
+                      <span className="text-sm font-bold text-secondary">{index + 1}</span>
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium text-dark">
+                        {vale.empleado.nombre} {vale.empleado.apellido}
+                      </p>
+                      <p className="text-sm text-gray-600">{vale.motivo?.motivo || vale.concepto}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-secondary text-lg">
+                      ${Math.round(parseFloat(vale.importe)).toLocaleString('es-AR')}
+                    </p>
+                  </div>
+                </div>
+              ))}
+              <div className="pt-3 border-t">
+                <div className="flex justify-between items-center">
+                  <p className="text-sm text-gray-600">
+                    Total de vales: <span className="font-bold text-dark">{detalleVales.length}</span>
+                  </p>
+                  <p className="text-lg font-bold text-secondary">
+                    ${Math.round(resumen.totalVales).toLocaleString('es-AR')}
+                  </p>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </Modal>
 
+      {/* Modal Ausencias */}
       <Modal
         isOpen={modalAusencias}
         onClose={() => setModalAusencias(false)}
         title="Ausencias del Día"
       >
-        {/* ... contenido del modal ausencias ... */}
+        <div className="space-y-3">
+          {detalleAusencias.length === 0 ? (
+            <p className="text-gray-500 text-center py-4">No hay ausencias registradas hoy</p>
+          ) : (
+            <>
+              {detalleAusencias.map((ausencia, index) => (
+                <div key={ausencia.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-3 flex-1">
+                    <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                      <span className="text-sm font-bold text-red-600">{index + 1}</span>
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium text-dark">
+                        {ausencia.empleado.nombre} {ausencia.empleado.apellido}
+                      </p>
+                      <p className="text-sm text-gray-600">{ausencia.motivo.motivo}</p>
+                      {ausencia.observaciones && (
+                        <p className="text-xs text-gray-500 mt-1">{ausencia.observaciones}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <div className="pt-3 border-t">
+                <p className="text-sm text-gray-600 text-center">
+                  Total de ausencias: <span className="font-bold text-dark">{detalleAusencias.length}</span>
+                </p>
+              </div>
+            </>
+          )}
+        </div>
       </Modal>
 
-      {/* Modal Reporte de Estado */}
-      {modalReporteEstado && localActual && (
-        <Modal
-          isOpen={true}
-          onClose={() => setModalReporteEstado(false)}
-          title="Reporte de Estado"
-          size="lg"
-        >
-          <ReporteEstado 
-            localId={localActual.id}
-            localNombre={localActual.nombre}
-            onAlert={setAlert}
-          />
-        </Modal>
-      )}
-
-      {/* Modal Cierre del Día */}
-      {modalCierreDia && localActual && (
-        <Modal
-          isOpen={true}
-          onClose={() => setModalCierreDia(false)}
-          title="Cierre del Día"
-          size="lg"
-        >
-          <CierreDia 
-            localId={localActual.id}
-            localNombre={localActual.nombre}
-            onAlert={setAlert}
-            onCierreExitoso={handleCierreExitoso}
-          />
-        </Modal>
-      )}
-
+      {/* Footer */}
       <footer className="smartdom-footer">
         <p>Desarrollado por SmartDom</p>
       </footer>
