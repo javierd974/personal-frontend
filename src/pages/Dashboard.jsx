@@ -369,28 +369,139 @@ const Dashboard = () => {
       </main>
 
       {/* Modales */}
+      
+      {/* Modal Personal en Turno */}
       <Modal
         isOpen={modalPersonal}
         onClose={() => setModalPersonal(false)}
         title="Personal en Turno"
       >
-        {/* ... contenido del modal personal ... */}
+        <div className="space-y-3">
+          {empleadosEnTurno.length === 0 ? (
+            <p className="text-gray-500 text-center py-4">No hay personal en turno</p>
+          ) : (
+            empleadosEnTurno.map((emp, index) => {
+              // Formatear hora de entrada a HH:MM
+              const horaEntrada = emp.hora_entrada.includes('T') 
+                ? new Date(emp.hora_entrada).toLocaleTimeString('es-AR', { 
+                    hour: '2-digit', 
+                    minute: '2-digit',
+                    hour12: false 
+                  })
+                : emp.hora_entrada.substring(0, 5)
+              
+              return (
+                <div key={emp.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                      <span className="text-sm font-bold text-primary">{index + 1}</span>
+                    </div>
+                    <div>
+                      <p className="font-medium text-dark">
+                        {emp.empleado.nombre} {emp.empleado.apellido}
+                      </p>
+                      <p className="text-sm text-gray-600">{emp.rol.nombre}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-gray-600">Entrada</p>
+                    <p className="font-medium text-primary">{horaEntrada}</p>
+                  </div>
+                </div>
+              )
+            })
+          )}
+          <div className="pt-3 border-t">
+            <p className="text-sm text-gray-600 text-center">
+              Total en turno: <span className="font-bold text-dark">{empleadosEnTurno.length}</span>
+            </p>
+          </div>
+        </div>
       </Modal>
 
+      {/* Modal Vales del Día */}
       <Modal
         isOpen={modalVales}
         onClose={() => setModalVales(false)}
         title="Vales del Día"
       >
-        {/* ... contenido del modal vales ... */}
+        <div className="space-y-3">
+          {detalleVales.length === 0 ? (
+            <p className="text-gray-500 text-center py-4">No hay vales registrados hoy</p>
+          ) : (
+            <>
+              {detalleVales.map((vale, index) => (
+                <div key={vale.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-3 flex-1">
+                    <div className="w-8 h-8 bg-secondary/10 rounded-full flex items-center justify-center">
+                      <span className="text-sm font-bold text-secondary">{index + 1}</span>
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium text-dark">
+                        {vale.empleado.nombre} {vale.empleado.apellido}
+                      </p>
+                      <p className="text-sm text-gray-600">{vale.motivo?.motivo || vale.concepto}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-secondary text-lg">
+                      ${Math.round(parseFloat(vale.importe)).toLocaleString('es-AR')}
+                    </p>
+                  </div>
+                </div>
+              ))}
+              <div className="pt-3 border-t">
+                <div className="flex justify-between items-center">
+                  <p className="text-sm text-gray-600">
+                    Total de vales: <span className="font-bold text-dark">{detalleVales.length}</span>
+                  </p>
+                  <p className="text-lg font-bold text-secondary">
+                    ${Math.round(resumen.totalVales).toLocaleString('es-AR')}
+                  </p>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </Modal>
 
+      {/* Modal Ausencias */}
       <Modal
         isOpen={modalAusencias}
         onClose={() => setModalAusencias(false)}
         title="Ausencias del Día"
       >
-        {/* ... contenido del modal ausencias ... */}
+        <div className="space-y-3">
+          {detalleAusencias.length === 0 ? (
+            <p className="text-gray-500 text-center py-4">No hay ausencias registradas hoy</p>
+          ) : (
+            <>
+              {detalleAusencias.map((ausencia, index) => (
+                <div key={ausencia.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-3 flex-1">
+                    <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                      <span className="text-sm font-bold text-red-600">{index + 1}</span>
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium text-dark">
+                        {ausencia.empleado.nombre} {ausencia.empleado.apellido}
+                      </p>
+                      <p className="text-sm text-gray-600">{ausencia.motivo.motivo}</p>
+                      {ausencia.observaciones && (
+                        <p className="text-xs text-gray-500 mt-1">{ausencia.observaciones}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <div className="pt-3 border-t">
+                <p className="text-sm text-gray-600 text-center">
+                  Total de ausencias: <span className="font-bold text-dark">{detalleAusencias.length}</span>
+                </p>
+              </div>
+            </>
+          )}
+        </div>
       </Modal>
 
       {/* Modal Reporte de Estado */}
