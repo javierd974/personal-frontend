@@ -10,23 +10,25 @@ export const cierreDiaService = {
     const horaLocal = ahora.getHours()
     const minutosLocal = ahora.getMinutes()
     const horaDecimal = horaLocal + (minutosLocal / 60)
-    
-    // El día puede cerrarse desde las 03:00 AM hasta las 04:00 AM del día siguiente
-    // Esto da margen al encargado para hacer el cierre
-    if (horaLocal < 3) {
-      // Entre 00:00 y 02:59 - Aún es parte del día de trabajo, puede cerrar
-      return { valido: true }
-    }
-    
-    if (horaLocal >= 4 && horaLocal < 24) {
-      // Entre las 04:00 y las 23:59 - NO puede cerrar, debe esperar
-      const horaFaltante = 24 + 3 - Math.ceil(horaDecimal) // Hasta las 3 AM del día siguiente
+
+    // El cierre puede realizarse desde la 01:00 AM hasta las 04:00 AM (hora local)
+    if (horaLocal < 1) {
+      // Entre 00:00 y 00:59 - Demasiado temprano
       return {
         valido: false,
-        mensaje: `El cierre del día solo puede realizarse entre las 03:00 AM y 04:00 AM. Faltan aproximadamente ${horaFaltante} horas.`
+        mensaje: 'El cierre del día solo puede realizarse desde la 01:00 AM hasta las 04:00 AM.'
       }
     }
-    
+
+    if (horaLocal >= 4 && horaLocal < 24) {
+      // Entre las 04:00 y las 23:59 - NO puede cerrar, debe esperar
+      const horaFaltante = 24 + 1 - Math.ceil(horaDecimal) // Hasta la 1 AM del día siguiente
+      return {
+        valido: false,
+        mensaje: `El cierre del día solo puede realizarse desde la 01:00 AM hasta las 04:00 AM. Faltan aproximadamente ${horaFaltante} horas.`
+      }
+    }
+
     return { valido: true }
   },
 

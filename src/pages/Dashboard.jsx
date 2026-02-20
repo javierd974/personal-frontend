@@ -39,6 +39,9 @@ const Dashboard = () => {
   })
   const [alert, setAlert] = useState(null)
   
+  // NUEVO: Estado para las observaciones
+  const [observacionesGenerales, setObservacionesGenerales] = useState('')
+  
   // Estados para modales
   const [modalPersonal, setModalPersonal] = useState(false)
   const [modalVales, setModalVales] = useState(false)
@@ -47,6 +50,26 @@ const Dashboard = () => {
   const [modalReporteEstado, setModalReporteEstado] = useState(false)
   const [detalleVales, setDetalleVales] = useState([])
   const [detalleAusencias, setDetalleAusencias] = useState([])
+
+  // Timeout de sesión: máximo 30 minutos en el dashboard
+  useEffect(() => {
+    const WARNING_MS = 25 * 60 * 1000  // Aviso a los 25 minutos
+    const SESSION_MS  = 30 * 60 * 1000  // Cierre a los 30 minutos
+
+    const warningTimer = setTimeout(() => {
+      setAlert({ type: 'warning', message: 'La sesión expirará en 5 minutos. La pantalla se cerrará automáticamente.' })
+    }, WARNING_MS)
+
+    const sessionTimer = setTimeout(async () => {
+      await authService.signOut()
+      navigate('/login')
+    }, SESSION_MS)
+
+    return () => {
+      clearTimeout(warningTimer)
+      clearTimeout(sessionTimer)
+    }
+  }, [])
 
   useEffect(() => {
     cargarDatos()
@@ -119,8 +142,15 @@ const Dashboard = () => {
 
   // Función para limpiar dashboard después de cerrar día
   const handleCierreExitoso = async () => {
+    // Limpiar observaciones después del cierre
+    setObservacionesGenerales('')
     await cargarResumenLocal()
     setModalCierreDia(false)
+  }
+
+  // NUEVO: Manejar cambio de observaciones desde RegistroHorarios
+  const handleObservacionesChange = (nuevasObservaciones) => {
+    setObservacionesGenerales(nuevasObservaciones)
   }
 
   // Funciones para abrir modales con detalle
@@ -325,12 +355,14 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Control de Horarios */}
+        {/* Control de Horarios - MODIFICADO: Pasar props de observaciones */}
         {localActual && (
           <RegistroHorarios 
             localId={localActual.id}
             onUpdate={cargarResumenLocal}
             onAlert={setAlert}
+            observaciones={observacionesGenerales}
+            onObservacionesChange={handleObservacionesChange}
           />
         )}
 
@@ -512,15 +544,16 @@ const Dashboard = () => {
           title="Reporte de Estado"
           size="lg"
         >
-          <ReporteEstado 
+          <ReporteEstado
             localId={localActual.id}
             localNombre={localActual.nombre}
             onAlert={setAlert}
+            observacionesInicial={observacionesGenerales}
           />
         </Modal>
       )}
 
-      {/* Modal Cierre del Día */}
+      {/* Modal Cierre del Día - MODIFICADO: Pasar observaciones */}
       {modalCierreDia && localActual && (
         <Modal
           isOpen={true}
@@ -533,6 +566,7 @@ const Dashboard = () => {
             localNombre={localActual.nombre}
             onAlert={setAlert}
             onCierreExitoso={handleCierreExitoso}
+            observacionesIniciales={observacionesGenerales}
           />
         </Modal>
       )}

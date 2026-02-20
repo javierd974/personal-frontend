@@ -6,16 +6,21 @@ import Modal from '../common/Modal'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
-const CierreDia = ({ localId, localNombre, onAlert, onCierreExitoso }) => {
+const CierreDia = ({ localId, localNombre, onAlert, onCierreExitoso, observacionesIniciales = '' }) => {
   const [loading, setLoading] = useState(false)
   const [datosReporte, setDatosReporte] = useState(null)
-  const [observaciones, setObservaciones] = useState('')
+  const [observaciones, setObservaciones] = useState(observacionesIniciales)
   const [cierresAnteriores, setCierresAnteriores] = useState([])
   const [modalConfirmacion, setModalConfirmacion] = useState(false)
 
   useEffect(() => {
     cargarCierresAnteriores()
   }, [localId])
+
+  // NUEVO: Sincronizar observaciones cuando cambien desde el Dashboard
+  useEffect(() => {
+    setObservaciones(observacionesIniciales)
+  }, [observacionesIniciales])
 
   const cargarCierresAnteriores = async () => {
     const result = await cierreDiaService.getCierres(localId)
@@ -200,7 +205,7 @@ ${centrar('───────────────────────
           <div>
             <p className="font-medium text-blue-900">Información del Cierre del Día</p>
             <p className="text-sm text-blue-700 mt-1">
-              El cierre del día solo puede realizarse entre las <strong>03:00 AM y 04:00 AM</strong>.
+              El cierre del día puede realizarse desde la <strong>01:00 AM hasta las 04:00 AM</strong>.
               Este cierre reiniciará todos los contadores y preparará el sistema para el nuevo día.
             </p>
             <p className="text-sm text-blue-700 mt-1">
@@ -224,6 +229,11 @@ ${centrar('───────────────────────
               rows="4"
               placeholder="Ingrese observaciones generales sobre el día de trabajo..."
             />
+            {observacionesIniciales && (
+              <p className="text-xs text-green-600 mt-1">
+                ✓ Observaciones cargadas desde el registro del turno
+              </p>
+            )}
           </div>
 
           <div className="flex space-x-3">

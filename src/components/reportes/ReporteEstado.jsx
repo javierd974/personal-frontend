@@ -5,13 +5,18 @@ import LoadingSpinner from '../common/LoadingSpinner'
 import Modal from '../common/Modal'
 import { format } from 'date-fns'
 
-const ReporteEstado = ({ localId, localNombre, onAlert }) => {
+const ReporteEstado = ({ localId, localNombre, onAlert, observacionesInicial = '' }) => {
   const [loading, setLoading] = useState(false)
   const [datosReporte, setDatosReporte] = useState(null)
-  const [observaciones, setObservaciones] = useState('')
+  const [observaciones, setObservaciones] = useState(observacionesInicial)
   const [reportesAnteriores, setReportesAnteriores] = useState([])
   const [modalVistaPrevia, setModalVistaPrevia] = useState(false)
   const [reporteGuardado, setReporteGuardado] = useState(null)
+
+  // Sincronizar observaciones cuando cambien desde el Dashboard
+  useEffect(() => {
+    setObservaciones(observacionesInicial)
+  }, [observacionesInicial])
 
   useEffect(() => {
     cargarReportesAnteriores()
@@ -290,6 +295,16 @@ const ReporteEstado = ({ localId, localNombre, onAlert }) => {
                 </div>
               </div>
             )}
+
+            {/* Observaciones */}
+            <div>
+              <h4 className="font-semibold text-dark mb-2">Observaciones del Turno</h4>
+              <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm">
+                <p className="text-gray-700 whitespace-pre-wrap">
+                  {datosReporte.observaciones || <span className="text-gray-400 italic">Sin observaciones</span>}
+                </p>
+              </div>
+            </div>
 
             {/* Botones de acción */}
             <div className="flex space-x-3 pt-4 border-t">

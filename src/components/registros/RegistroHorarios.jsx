@@ -18,7 +18,7 @@ import LoadingSpinner from '../common/LoadingSpinner'
 import Modal from '../common/Modal'
 import { format } from 'date-fns'
 
-const RegistroHorarios = ({ localId, onUpdate, onAlert }) => {
+const RegistroHorarios = ({ localId, onUpdate, onAlert, observaciones, onObservacionesChange }) => {
   const [loading, setLoading] = useState(true)
   const [empleados, setEmpleados] = useState([])
   const [registrosHoy, setRegistrosHoy] = useState([])
@@ -42,7 +42,7 @@ const RegistroHorarios = ({ localId, onUpdate, onAlert }) => {
   // Formularios
   const [rolSeleccionado, setRolSeleccionado] = useState(null)
   const [indiceRol, setIndiceRol] = useState(0)
-  const [observacionesGenerales, setObservacionesGenerales] = useState('')
+  const [observacionesInternas, setObservacionesInternas] = useState('')
   
   const [formVale, setFormVale] = useState({
     empleadoId: '',
@@ -73,6 +73,13 @@ const RegistroHorarios = ({ localId, onUpdate, onAlert }) => {
   useEffect(() => {
     cargarDatos()
   }, [localId])
+
+  // Sincronizar observaciones con el prop del Dashboard
+  useEffect(() => {
+    if (observaciones !== undefined) {
+      setObservacionesInternas(observaciones)
+    }
+  }, [observaciones])
 
   // Dar foco al modal de rol cuando se abre
   useEffect(() => {
@@ -355,6 +362,15 @@ const RegistroHorarios = ({ localId, onUpdate, onAlert }) => {
     }
   }
 
+  // CORRECCIÓN: Guardar observaciones y notificar al Dashboard
+  const handleGuardarObservaciones = () => {
+    if (onObservacionesChange) {
+      onObservacionesChange(observacionesInternas)
+    }
+    onAlert({ type: 'success', message: 'Observaciones guardadas' })
+    setModalObservaciones(false)
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
@@ -460,15 +476,31 @@ const RegistroHorarios = ({ localId, onUpdate, onAlert }) => {
 
         <button
           onClick={() => setModalObservaciones(true)}
-          className="font-bold py-4 px-6 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg"
+          className="font-bold py-4 px-6 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg relative"
           style={{ backgroundColor: '#C9981D', color: '#1F2937' }}
           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#B38819'}
           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#C9981D'}
         >
           <FileText className="w-6 h-6" />
           <span>OBSERVACIONES</span>
+          {observaciones && observaciones.trim() && (
+            <span className="absolute -top-2 -right-2 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+              ✓
+            </span>
+          )}
         </button>
       </div>
+
+      {/* Indicador de observaciones guardadas */}
+      {observaciones && observaciones.trim() && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-2 flex items-start gap-2">
+          <FileText className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-yellow-800">
+            <span className="font-semibold">Observaciones guardadas:</span>{' '}
+            {observaciones.length > 100 ? observaciones.substring(0, 100) + '…' : observaciones}
+          </p>
+        </div>
+      )}
 
       {/* Registros del día */}
       <div className="card">
@@ -788,7 +820,7 @@ const RegistroHorarios = ({ localId, onUpdate, onAlert }) => {
         </div>
       </Modal>
 
-      {/* Modal de Observaciones */}
+      {/* Modal de Observaciones - CORREGIDO */}
       <Modal
         isOpen={modalObservaciones}
         onClose={() => setModalObservaciones(false)}
@@ -798,8 +830,8 @@ const RegistroHorarios = ({ localId, onUpdate, onAlert }) => {
           <div>
             <label className="label">Observaciones Generales</label>
             <textarea
-              value={observacionesGenerales}
-              onChange={(e) => setObservacionesGenerales(e.target.value)}
+              value={observacionesInternas}
+              onChange={(e) => setObservacionesInternas(e.target.value)}
               className="input-field"
               rows="6"
               placeholder="Anota aquí cualquier observación relevante del turno..."
@@ -810,10 +842,7 @@ const RegistroHorarios = ({ localId, onUpdate, onAlert }) => {
           </div>
 
           <button
-            onClick={() => {
-              onAlert({ type: 'success', message: 'Observaciones guardadas' })
-              setModalObservaciones(false)
-            }}
+            onClick={handleGuardarObservaciones}
             className="btn-primary w-full"
           >
             Guardar Observaciones
