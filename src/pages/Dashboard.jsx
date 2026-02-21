@@ -17,7 +17,7 @@ import {
 import { authService } from '../services/authService'
 import { localesService } from '../services/catalogosService'
 import { registrosService } from '../services/registrosService'
-import { valesService, ausenciasService } from '../services/catalogosService'
+import { valesService, ausenciasService, observacionesTurnoService } from '../services/catalogosService'
 import LoadingSpinner from '../components/common/LoadingSpinner'
 import Alert from '../components/common/Alert'
 import Modal from '../components/common/Modal'
@@ -78,6 +78,7 @@ const Dashboard = () => {
   useEffect(() => {
     if (localActual) {
       cargarResumenLocal()
+      cargarObservaciones()
     }
   }, [localActual])
 
@@ -140,15 +141,23 @@ const Dashboard = () => {
     }
   }
 
+  // Cargar observaciones desde Supabase
+  const cargarObservaciones = async () => {
+    if (!localActual) return
+    const result = await observacionesTurnoService.getObservacion(localActual.id)
+    if (result.success) {
+      setObservacionesGenerales(result.data)
+    }
+  }
+
   // Función para limpiar dashboard después de cerrar día
   const handleCierreExitoso = async () => {
-    // Limpiar observaciones después del cierre
     setObservacionesGenerales('')
     await cargarResumenLocal()
     setModalCierreDia(false)
   }
 
-  // NUEVO: Manejar cambio de observaciones desde RegistroHorarios
+  // Manejar cambio de observaciones desde RegistroHorarios (ya guardado en Supabase)
   const handleObservacionesChange = (nuevasObservaciones) => {
     setObservacionesGenerales(nuevasObservaciones)
   }

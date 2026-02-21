@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { empleadosService } from '../../services/empleadosService'
 import { registrosService } from '../../services/registrosService'
-import { rolesService, valesService, ausenciasService, motivosAusenciaService, motivosValesService } from '../../services/catalogosService'
+import { rolesService, valesService, ausenciasService, motivosAusenciaService, motivosValesService, observacionesTurnoService } from '../../services/catalogosService'
 import LoadingSpinner from '../common/LoadingSpinner'
 import Modal from '../common/Modal'
 import { format } from 'date-fns'
@@ -362,13 +362,18 @@ const RegistroHorarios = ({ localId, onUpdate, onAlert, observaciones, onObserva
     }
   }
 
-  // CORRECCIÓN: Guardar observaciones y notificar al Dashboard
-  const handleGuardarObservaciones = () => {
-    if (onObservacionesChange) {
-      onObservacionesChange(observacionesInternas)
+  // Guardar observaciones en Supabase y notificar al Dashboard
+  const handleGuardarObservaciones = async () => {
+    const result = await observacionesTurnoService.guardarObservacion(localId, observacionesInternas)
+    if (result.success) {
+      if (onObservacionesChange) {
+        onObservacionesChange(observacionesInternas)
+      }
+      onAlert({ type: 'success', message: 'Observaciones guardadas' })
+      setModalObservaciones(false)
+    } else {
+      onAlert({ type: 'error', message: 'Error al guardar observaciones' })
     }
-    onAlert({ type: 'success', message: 'Observaciones guardadas' })
-    setModalObservaciones(false)
   }
 
   if (loading) {

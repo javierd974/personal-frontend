@@ -60,6 +60,54 @@ export const localesService = {
   }
 }
 
+export const observacionesTurnoService = {
+  // Obtener observación del turno activo
+  async getObservacion(localId) {
+    try {
+      const fecha = getFechaTurnoActivo()
+      const { data, error } = await supabase
+        .from('observaciones_turno')
+        .select('*')
+        .eq('local_id', localId)
+        .eq('fecha', fecha)
+        .maybeSingle()
+
+      if (error) throw error
+      return { success: true, data: data?.contenido || '' }
+    } catch (error) {
+      return { success: false, error: handleSupabaseError(error) }
+    }
+  },
+
+  // Guardar (upsert) observación del turno activo
+  async guardarObservacion(localId, contenido) {
+    try {
+      const user = await getCurrentUser()
+      const fecha = getFechaTurnoActivo()
+
+      const { data, error } = await supabase
+        .from('observaciones_turno')
+        .upsert(
+          {
+            local_id: localId,
+            fecha,
+            contenido,
+            actualizado_por: user.id,
+            actualizado_at: new Date().toISOString()
+          },
+          { onConflict: 'local_id,fecha' }
+        )
+        .select()
+        .single()
+
+      if (error) throw error
+      return { success: true, data }
+    } catch (error) {
+      return { success: false, error: handleSupabaseError(error) }
+    }
+  }
+}
+
 export const valesService = {
   // Registrar un vale de caja
   async registrarVale(valeData) {
