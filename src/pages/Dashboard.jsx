@@ -51,10 +51,10 @@ const Dashboard = () => {
   const [detalleVales, setDetalleVales] = useState([])
   const [detalleAusencias, setDetalleAusencias] = useState([])
 
-  // Timeout de sesión: máximo 30 minutos en el dashboard
+  // Timeout de sesión: máximo 60 minutos en el dashboard
   useEffect(() => {
-    const WARNING_MS = 25 * 60 * 1000  // Aviso a los 25 minutos
-    const SESSION_MS  = 30 * 60 * 1000  // Cierre a los 30 minutos
+    const WARNING_MS = 55 * 60 * 1000  // Aviso a los 55 minutos
+    const SESSION_MS  = 60 * 60 * 1000  // Cierre a los 60 minutos
 
     const warningTimer = setTimeout(() => {
       setAlert({ type: 'warning', message: 'La sesión expirará en 5 minutos. La pantalla se cerrará automáticamente.' })
