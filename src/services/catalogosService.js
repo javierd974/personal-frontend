@@ -212,15 +212,8 @@ export const valesService = {
       if (error) throw error
       
       // Calcular total en centavos para evitar errores de punto flotante
-      const totalCentavos = data.reduce((sum, vale) => {
-        const importeCentavos = Math.round(parseFloat(vale.importe) * 100)
-        return sum + importeCentavos
-      }, 0)
-      
-      // Convertir de vuelta a pesos
-      const total = totalCentavos / 100
-      
-      return { success: true, total, cantidad: data.length }
+      const total = data.reduce((sum, vale) => sum + parseInt(vale.importe, 10), 0)
+        return { success: true, total, cantidad: data.length }
     } catch (error) {
       return { success: false, error: handleSupabaseError(error) }
     }

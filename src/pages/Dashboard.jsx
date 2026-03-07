@@ -486,7 +486,7 @@ const Dashboard = () => {
                   </div>
                   <div className="text-right">
                     <p className="font-bold text-secondary text-lg">
-                      ${Math.round(parseFloat(vale.importe)).toLocaleString('es-AR')}
+                      ${resumen.totalVales.toLocaleString('es-AR')}
                     </p>
                   </div>
                 </div>

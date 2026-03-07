@@ -61,10 +61,7 @@ export const reporteEstadoService = {
       if (!valesResult.success) throw new Error(valesResult.error)
       
       // Calcular total de vales
-      const totalVales = valesResult.data.reduce((sum, vale) => {
-        const importeCentavos = Math.round(parseFloat(vale.importe) * 100)
-        return sum + importeCentavos
-      }, 0) / 100
+      const totalVales = valesResult.data.reduce((sum, vale) => sum + parseInt(vale.importe, 10), 0)
       
       // Obtener ausencias del día
       const ausenciasResult = await ausenciasService.getAusenciasDelDia(localId)
@@ -218,16 +215,13 @@ export const reporteEstadoService = {
     const linea = (char = '-') => char.repeat(ancho)
     
     // Función para formatear precio sin decimales
-    const formatoPrecio = (valor) => {
-      return `$${Math.round(valor).toLocaleString('es-AR')}`
-    }
+    const formatoPrecio = (valor) => `$${parseInt(valor, 10).toLocaleString('es-AR')}`
     
     const datos = reporte.reporte_json || reporte
     
     let contenido = `
 ${centrar('═══════════════════════════════════')}
 ${centrar('REPORTE DE ESTADO')}
-${centrar('SmartDom')}
 ${centrar('═══════════════════════════════════')}
 
 ${centrar(localNombre.toUpperCase())}

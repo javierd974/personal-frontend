@@ -308,7 +308,7 @@ const RegistroHorarios = ({ localId, onUpdate, onAlert, observaciones, onObserva
         empleado_id: empleadoSeleccionadoVale.id,
         local_id: localId,
         motivo_id: formVale.motivoId,
-        importe: parseFloat(formVale.importe),
+        importe: parseInt(formVale.importe),
         concepto: formVale.concepto
       })
 
@@ -689,10 +689,12 @@ const RegistroHorarios = ({ localId, onUpdate, onAlert, observaciones, onObserva
             <label className="label">Importe</label>
             <input
               type="number"
+              step="1"
+              min="1"
               value={formVale.importe}
-              onChange={(e) => setFormVale({ ...formVale, importe: e.target.value })}
+              onChange={(e) => setFormVale({ ...formVale, importe: Math.trunc(Number(e.target.value)) || '' })}
               className="input-field"
-              placeholder="0.00"
+              placeholder="0"
             />
           </div>
 
