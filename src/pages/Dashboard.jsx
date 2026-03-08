@@ -313,7 +313,7 @@ const Dashboard = () => {
               <div>
                 <p className="text-sm text-gray-600 mb-1">Vales del Día</p>
                 <p className="text-3xl font-bold text-dark">
-                  ${Math.round(resumen.totalVales).toLocaleString('es-AR')}
+                  ${Math.round(vale.importe).toLocaleString('es-AR')}
                 </p>
                 <p className="text-xs text-gray-500">{resumen.cantidadVales} vales</p>
               </div>
@@ -486,7 +486,7 @@ const Dashboard = () => {
                   </div>
                   <div className="text-right">
                     <p className="font-bold text-secondary text-lg">
-                      ${resumen.totalVales.toLocaleString('es-AR')}
+                      ${Math.round(vale.importe).toLocaleString('es-AR')}  {}
                     </p>
                   </div>
                 </div>
