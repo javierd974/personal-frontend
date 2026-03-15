@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { FileText, Download, Eye, CheckCircle, AlertCircle } from 'lucide-react'
+import { FileText, Download, Eye, CheckCircle, AlertCircle, ClipboardList, Users } from 'lucide-react'
 import { cierreDiaService } from '../../services/cierreDiaService'
+import { reporteEstadoService } from '../../services/reporteEstadoService'
+import { registrosService } from '../../services/registrosService'
 import LoadingSpinner from '../common/LoadingSpinner'
 import Modal from '../common/Modal'
 import { format } from 'date-fns'
@@ -13,23 +15,70 @@ const CierreDia = ({ localId, localNombre, onAlert, onCierreExitoso, observacion
   const [cierresAnteriores, setCierresAnteriores] = useState([])
   const [modalConfirmacion, setModalConfirmacion] = useState(false)
 
+  // Estados de validación previas al cierre
+  const [validaciones, setValidaciones] = useState({
+    reporteGenerado: false,
+    sinPersonalActivo: false,
+    cargando: true
+  })
+
   useEffect(() => {
     cargarCierresAnteriores()
+    verificarCondicionesCierre()
   }, [localId])
 
-  // NUEVO: Sincronizar observaciones cuando cambien desde el Dashboard
   useEffect(() => {
     setObservaciones(observacionesIniciales)
   }, [observacionesIniciales])
 
+  const verificarCondicionesCierre = async () => {
+    setValidaciones(prev => ({ ...prev, cargando: true }))
+    try {
+      const hoy = format(new Date(), 'yyyy-MM-dd')
+
+      // 1. Verificar si existe al menos un reporte de estado generado hoy
+      const reportesResult = await reporteEstadoService.getReportes(localId, hoy, hoy)
+      const tieneReporte = reportesResult.success && reportesResult.data.length > 0
+
+      // 2. Verificar si hay personal sin registrar salida
+      const turnoResult = await registrosService.getEmpleadosEnTurno(localId)
+      const personalActivo = turnoResult.success ? turnoResult.data.length : 0
+
+      setValidaciones({
+        reporteGenerado: tieneReporte,
+        sinPersonalActivo: personalActivo === 0,
+        personalActivoCount: personalActivo,
+        cargando: false
+      })
+    } catch (error) {
+      setValidaciones({ reporteGenerado: false, sinPersonalActivo: false, personalActivoCount: 0, cargando: false })
+    }
+  }
+
   const cargarCierresAnteriores = async () => {
     const result = await cierreDiaService.getCierres(localId)
     if (result.success) {
-      setCierresAnteriores(result.data.slice(0, 5)) // Últimos 5 cierres
+      setCierresAnteriores(result.data.slice(0, 5))
     }
   }
 
   const generarVistaPrevia = async () => {
+    // Verificar condiciones antes de proceder
+    await verificarCondicionesCierre()
+
+    if (!validaciones.reporteGenerado) {
+      onAlert({ type: 'error', message: '⚠️ Debés generar el Reporte de Estado antes de realizar el cierre del día.' })
+      return
+    }
+
+    if (!validaciones.sinPersonalActivo) {
+      onAlert({ 
+        type: 'error', 
+        message: `⚠️ Hay ${validaciones.personalActivoCount} empleado(s) sin registrar salida. Registrá la salida de todos antes de cerrar el día.` 
+      })
+      return
+    }
+
     setLoading(true)
     try {
       const result = await cierreDiaService.generarDatosCierre(localId)
@@ -49,7 +98,7 @@ const CierreDia = ({ localId, localNombre, onAlert, onCierreExitoso, observacion
 
   const abrirConfirmacion = () => {
     if (!datosReporte) {
-      onAlert({ type: 'warning', message: 'Primero genera la vista previa del cierre' })
+      onAlert({ type: 'warning', message: 'Primero generá la vista previa del cierre' })
       return
     }
     setModalConfirmacion(true)
@@ -58,10 +107,7 @@ const CierreDia = ({ localId, localNombre, onAlert, onCierreExitoso, observacion
   const confirmarCierre = async () => {
     setLoading(true)
     try {
-      const result = await cierreDiaService.cerrarDia(
-        localId,
-        observaciones
-      )
+      const result = await cierreDiaService.cerrarDia(localId, observaciones)
       
       if (result.success) {
         onAlert({ type: 'success', message: '✅ Día cerrado correctamente. Los valores se han reiniciado.' })
@@ -70,7 +116,6 @@ const CierreDia = ({ localId, localNombre, onAlert, onCierreExitoso, observacion
         setModalConfirmacion(false)
         await cargarCierresAnteriores()
         
-        // Notificar al Dashboard que se cerró el día
         if (onCierreExitoso) {
           onCierreExitoso()
         }
@@ -85,10 +130,7 @@ const CierreDia = ({ localId, localNombre, onAlert, onCierreExitoso, observacion
   }
 
   const descargarReporte = (cierre) => {
-    // Generar contenido del reporte
     const contenido = generarContenidoReporte(cierre)
-    
-    // Crear blob y descargar
     const blob = new Blob([contenido], { type: 'text/plain;charset=utf-8' })
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -100,18 +142,13 @@ const CierreDia = ({ localId, localNombre, onAlert, onCierreExitoso, observacion
 
   const generarContenidoReporte = (cierre) => {
     const datos = cierre.reporte_json || cierre
-    const ancho = 42 // Caracteres por línea en 80mm
-    
+    const ancho = 42
     const centrar = (texto) => {
       const espacios = Math.max(0, Math.floor((ancho - texto.length) / 2))
       return ' '.repeat(espacios) + texto
     }
-    
     const linea = (char = '-') => char.repeat(ancho)
-    
-    const formatoPrecio = (valor) => {
-      return `$${Math.round(valor).toLocaleString('es-AR')}`
-    }
+    const formatoPrecio = (valor) => `$${Math.round(valor).toLocaleString('es-AR')}`
     
     let contenido = `
 ${centrar('═══════════════════════════════════')}
@@ -145,11 +182,9 @@ ${datos.personal.map((p, i) => {
     p.horaSalida.includes('T') ? 
       format(new Date(p.horaSalida), 'HH:mm') : 
       p.horaSalida.substring(0, 5)
-  
   return `${i + 1}. ${p.empleado}
    ${p.rol}
-   E: ${entrada} | S: ${salida}${p.observaciones ? `
-   Obs: ${p.observaciones}` : ''}`
+   E: ${entrada} | S: ${salida}${p.observaciones ? `\n   Obs: ${p.observaciones}` : ''}`
 }).join('\n\n')}
 
 ${linea('=')}
@@ -159,10 +194,9 @@ ${linea()}
 Cantidad: ${datos.cantidadVales}
 TOTAL: ${formatoPrecio(datos.totalVales)}
 
-${datos.vales.length > 0 ? datos.vales.map((v, i) => {
-  return `${i + 1}. ${v.empleado}
-   ${formatoPrecio(v.importe)} - ${v.motivo || v.concepto}`
-}).join('\n\n') : 'Sin vales registrados'}
+${datos.vales.length > 0 ? datos.vales.map((v, i) => 
+  `${i + 1}. ${v.empleado}\n   ${formatoPrecio(v.importe)} - ${v.motivo || v.concepto}`
+).join('\n\n') : 'Sin vales registrados'}
 
 ${linea('=')}
 
@@ -170,11 +204,9 @@ AUSENCIAS
 ${linea()}
 Total: ${datos.cantidadAusencias}
 
-${datos.ausencias.length > 0 ? datos.ausencias.map((a, i) => {
-  return `${i + 1}. ${a.empleado}
-   ${a.motivo}${a.observaciones ? `
-   Obs: ${a.observaciones}` : ''}`
-}).join('\n\n') : 'Sin ausencias registradas'}
+${datos.ausencias.length > 0 ? datos.ausencias.map((a, i) => 
+  `${i + 1}. ${a.empleado}\n   ${a.motivo}${a.observaciones ? `\n   Obs: ${a.observaciones}` : ''}`
+).join('\n\n') : 'Sin ausencias registradas'}
 
 ${linea('=')}
 
@@ -196,6 +228,9 @@ ${centrar('───────────────────────
     return contenido
   }
 
+  // ─── Panel de estado de condiciones ──────────────────────────────────────────
+  const puedeGenerarVistaPrevia = validaciones.reporteGenerado && validaciones.sinPersonalActivo
+
   return (
     <div className="space-y-6">
       {/* Información importante */}
@@ -206,13 +241,102 @@ ${centrar('───────────────────────
             <p className="font-medium text-blue-900">Información del Cierre del Día</p>
             <p className="text-sm text-blue-700 mt-1">
               El cierre del día puede realizarse desde la <strong>01:00 AM hasta las 04:00 AM</strong>.
-              Este cierre reiniciará todos los contadores y preparará el sistema para el nuevo día.
             </p>
             <p className="text-sm text-blue-700 mt-1">
               El día de trabajo inicia a las <strong>05:00 AM</strong> y puede extenderse hasta las <strong>04:00 AM</strong> del día siguiente.
             </p>
           </div>
         </div>
+      </div>
+
+      {/* ── Checklist de condiciones previas al cierre ── */}
+      <div className="card">
+        <h3 className="text-lg font-bold text-dark mb-4 flex items-center gap-2">
+          <CheckCircle className="w-5 h-5 text-gray-400" />
+          Condiciones para el Cierre
+        </h3>
+
+        {validaciones.cargando ? (
+          <div className="flex justify-center py-4">
+            <LoadingSpinner size="sm" text="Verificando condiciones..." />
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {/* Condición 1: Horario */}
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50">
+              <div className="w-6 h-6 flex-shrink-0 flex items-center justify-center">
+                <CheckCircle className="w-5 h-5 text-gray-400" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-gray-700">Horario permitido</p>
+                <p className="text-xs text-gray-500">Entre las 01:00 AM y las 04:00 AM</p>
+              </div>
+              <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-500 font-medium">
+                Se valida al confirmar
+              </span>
+            </div>
+
+            {/* Condición 2: Reporte generado */}
+            <div className={`flex items-center gap-3 p-3 rounded-lg ${
+              validaciones.reporteGenerado ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+            }`}>
+              <div className="w-6 h-6 flex-shrink-0 flex items-center justify-center">
+                {validaciones.reporteGenerado
+                  ? <CheckCircle className="w-5 h-5 text-green-500" />
+                  : <AlertCircle className="w-5 h-5 text-red-500" />
+                }
+              </div>
+              <div className="flex-1">
+                <p className={`text-sm font-medium ${validaciones.reporteGenerado ? 'text-green-800' : 'text-red-800'}`}>
+                  Reporte de Estado generado
+                </p>
+                <p className={`text-xs ${validaciones.reporteGenerado ? 'text-green-600' : 'text-red-600'}`}>
+                  {validaciones.reporteGenerado
+                    ? 'El reporte de estado fue generado correctamente'
+                    : 'Debés generar el Reporte de Estado antes de cerrar el día'
+                  }
+                </p>
+              </div>
+              {!validaciones.reporteGenerado && (
+                <ClipboardList className="w-5 h-5 text-red-400 flex-shrink-0" />
+              )}
+            </div>
+
+            {/* Condición 3: Sin personal activo */}
+            <div className={`flex items-center gap-3 p-3 rounded-lg ${
+              validaciones.sinPersonalActivo ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+            }`}>
+              <div className="w-6 h-6 flex-shrink-0 flex items-center justify-center">
+                {validaciones.sinPersonalActivo
+                  ? <CheckCircle className="w-5 h-5 text-green-500" />
+                  : <AlertCircle className="w-5 h-5 text-red-500" />
+                }
+              </div>
+              <div className="flex-1">
+                <p className={`text-sm font-medium ${validaciones.sinPersonalActivo ? 'text-green-800' : 'text-red-800'}`}>
+                  Todo el personal con salida registrada
+                </p>
+                <p className={`text-xs ${validaciones.sinPersonalActivo ? 'text-green-600' : 'text-red-600'}`}>
+                  {validaciones.sinPersonalActivo
+                    ? 'No hay empleados con turno abierto'
+                    : `Hay ${validaciones.personalActivoCount} empleado(s) sin registrar salida`
+                  }
+                </p>
+              </div>
+              {!validaciones.sinPersonalActivo && (
+                <Users className="w-5 h-5 text-red-400 flex-shrink-0" />
+              )}
+            </div>
+
+            {/* Botón actualizar */}
+            <button
+              onClick={verificarCondicionesCierre}
+              className="text-xs text-primary hover:underline mt-1"
+            >
+              ↻ Actualizar estado
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Configuración del cierre */}
@@ -239,8 +363,13 @@ ${centrar('───────────────────────
           <div className="flex space-x-3">
             <button
               onClick={generarVistaPrevia}
-              className="btn-outline flex items-center space-x-2 flex-1"
-              disabled={loading}
+              className={`flex items-center space-x-2 flex-1 ${
+                puedeGenerarVistaPrevia
+                  ? 'btn-outline'
+                  : 'btn-outline opacity-60 cursor-not-allowed'
+              }`}
+              disabled={loading || !puedeGenerarVistaPrevia}
+              title={!puedeGenerarVistaPrevia ? 'Debés cumplir todas las condiciones previas' : ''}
             >
               <Eye className="w-5 h-5" />
               <span>Vista Previa</span>
@@ -257,6 +386,12 @@ ${centrar('───────────────────────
               </button>
             )}
           </div>
+
+          {!puedeGenerarVistaPrevia && !validaciones.cargando && (
+            <p className="text-sm text-red-600 text-center">
+              Completá todas las condiciones marcadas en rojo para poder generar el cierre.
+            </p>
+          )}
         </div>
       </div>
 
@@ -279,7 +414,6 @@ ${centrar('───────────────────────
           </div>
 
           <div className="bg-white rounded-lg p-6 space-y-6">
-            {/* Resumen */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-primary/10 rounded-lg p-4">
                 <p className="text-sm text-gray-600 mb-1">Personal Total</p>
@@ -302,7 +436,6 @@ ${centrar('───────────────────────
               </div>
             </div>
 
-            {/* Personal */}
             <div>
               <h4 className="font-semibold text-dark mb-3">Personal del Día</h4>
               <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -348,7 +481,6 @@ ${centrar('───────────────────────
                     Total vales: ${Math.round(parseFloat(cierre.total_vales)).toLocaleString('es-AR')}
                   </p>
                 </div>
-
                 <div className="flex space-x-2">
                   <button
                     onClick={() => descargarReporte(cierre)}

@@ -12,7 +12,8 @@ import {
   DollarSign,
   Settings,
   X,
-  ClipboardList
+  ClipboardList,
+  MapPin
 } from 'lucide-react'
 import { authService } from '../services/authService'
 import { localesService } from '../services/catalogosService'
@@ -39,7 +40,7 @@ const Dashboard = () => {
   })
   const [alert, setAlert] = useState(null)
   
-  // NUEVO: Estado para las observaciones
+  // Estado para las observaciones
   const [observacionesGenerales, setObservacionesGenerales] = useState('')
   
   // Estados para modales
@@ -53,8 +54,8 @@ const Dashboard = () => {
 
   // Timeout de sesión: máximo 60 minutos en el dashboard
   useEffect(() => {
-    const WARNING_MS = 55 * 60 * 1000  // Aviso a los 55 minutos
-    const SESSION_MS  = 60 * 60 * 1000  // Cierre a los 60 minutos
+    const WARNING_MS = 55 * 60 * 1000
+    const SESSION_MS  = 60 * 60 * 1000
 
     const warningTimer = setTimeout(() => {
       setAlert({ type: 'warning', message: 'La sesión expirará en 5 minutos. La pantalla se cerrará automáticamente.' })
@@ -85,7 +86,6 @@ const Dashboard = () => {
   const cargarDatos = async () => {
     setLoading(true)
     try {
-      // Obtener usuario actual
       const userResult = await authService.getCurrentUser()
       if (!userResult.success) {
         navigate('/login')
@@ -93,11 +93,11 @@ const Dashboard = () => {
       }
       setUsuario(userResult.data)
 
-      // Obtener locales del usuario
       const localesResult = await localesService.getLocalesUsuario()
       if (localesResult.success && localesResult.data.length > 0) {
         setLocales(localesResult.data)
-        setLocalActual(localesResult.data[0])
+        // NO asignar local por defecto — el usuario debe elegir
+        setLocalActual(null)
       } else {
         setAlert({ type: 'warning', message: 'No tiene locales asignados. Contacte al administrador.' })
       }
@@ -112,13 +112,11 @@ const Dashboard = () => {
     if (!localActual) return
 
     try {
-      // Empleados en turno
       const turnoResult = await registrosService.getEmpleadosEnTurno(localActual.id)
       if (turnoResult.success) {
         setEmpleadosEnTurno(turnoResult.data)
       }
 
-      // Total de vales
       const valesResult = await valesService.getTotalValesDelDia(localActual.id)
       if (valesResult.success) {
         setResumen(prev => ({
@@ -128,7 +126,6 @@ const Dashboard = () => {
         }))
       }
 
-      // Ausencias
       const ausenciasResult = await ausenciasService.getAusenciasDelDia(localActual.id)
       if (ausenciasResult.success) {
         setResumen(prev => ({
@@ -141,7 +138,6 @@ const Dashboard = () => {
     }
   }
 
-  // Cargar observaciones desde Supabase
   const cargarObservaciones = async () => {
     if (!localActual) return
     const result = await observacionesTurnoService.getObservacion(localActual.id)
@@ -150,19 +146,16 @@ const Dashboard = () => {
     }
   }
 
-  // Función para limpiar dashboard después de cerrar día
   const handleCierreExitoso = async () => {
     setObservacionesGenerales('')
     await cargarResumenLocal()
     setModalCierreDia(false)
   }
 
-  // Manejar cambio de observaciones desde RegistroHorarios (ya guardado en Supabase)
   const handleObservacionesChange = (nuevasObservaciones) => {
     setObservacionesGenerales(nuevasObservaciones)
   }
 
-  // Funciones para abrir modales con detalle
   const abrirModalPersonal = () => {
     setModalPersonal(true)
   }
@@ -198,6 +191,11 @@ const Dashboard = () => {
     }
   }
 
+  // Selección de local desde la pantalla de bienvenida
+  const handleSeleccionarLocal = (local) => {
+    setLocalActual(local)
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -206,6 +204,89 @@ const Dashboard = () => {
     )
   }
 
+  // ─── PANTALLA DE SELECCIÓN DE LOCAL ─────────────────────────────────────────
+  if (!localActual) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-primary to-primary-dark flex flex-col">
+        {/* Header mínimo */}
+        <header className="flex items-center justify-between px-6 py-4">
+          <div>
+            <h1 className="text-white text-xl font-bold">PERSONAL LOS NOTABLES</h1>
+            <p className="text-white/70 text-xs">Sistema de Gestión</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {usuario?.rol === 'administrador' && (
+              <button
+                onClick={() => navigate('/admin')}
+                className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                title="Administración"
+              >
+                <Settings className="w-5 h-5" />
+              </button>
+            )}
+            <button
+              onClick={handleCerrarSesion}
+              className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+              title="Cerrar Sesión"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          </div>
+        </header>
+
+        {/* Contenido de selección */}
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="w-full max-w-md">
+            <div className="bg-white rounded-2xl shadow-2xl p-8">
+              <div className="text-center mb-8">
+                <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <MapPin className="w-8 h-8 text-primary" />
+                </div>
+                <h2 className="text-2xl font-bold text-dark">Seleccionar Local</h2>
+                <p className="text-gray-500 mt-2 text-sm">
+                  Hola, <span className="font-semibold text-dark">{usuario?.nombre}</span>. 
+                  Indicá en qué local vas a trabajar hoy.
+                </p>
+              </div>
+
+              {locales.length === 0 ? (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
+                  <p className="text-yellow-800 text-sm">No tenés locales asignados. Contactá al administrador.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {locales.map((local) => (
+                    <button
+                      key={local.id}
+                      onClick={() => handleSeleccionarLocal(local)}
+                      className="w-full flex items-center gap-4 p-4 border-2 border-gray-200 rounded-xl hover:border-primary hover:bg-primary/5 transition-all text-left group"
+                    >
+                      <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-primary/20 transition-colors">
+                        <Store className="w-6 h-6 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-dark truncate">{local.nombre}</p>
+                        {local.direccion && (
+                          <p className="text-sm text-gray-500 truncate">{local.direccion}</p>
+                        )}
+                      </div>
+                      <ChevronDown className="w-5 h-5 text-gray-400 group-hover:text-primary -rotate-90 transition-colors flex-shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <footer className="text-center text-white/50 text-xs py-4">
+          Desarrollado por SmartDom
+        </footer>
+      </div>
+    )
+  }
+
+  // ─── DASHBOARD PRINCIPAL ────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -221,7 +302,7 @@ const Dashboard = () => {
 
             <div className="flex items-center space-x-4">
               {/* Selector de local */}
-              {locales.length > 0 && (
+              {locales.length > 1 && (
                 <div className="relative">
                   <select
                     value={localActual?.id || ''}
@@ -240,6 +321,23 @@ const Dashboard = () => {
                   <Store className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
                 </div>
               )}
+
+              {/* Badge del local actual cuando solo hay uno */}
+              {locales.length === 1 && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-primary/10 rounded-lg">
+                  <Store className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-medium text-primary">{localActual.nombre}</span>
+                </div>
+              )}
+
+              {/* Botón para cambiar de local */}
+              <button
+                onClick={() => setLocalActual(null)}
+                className="px-3 py-2 text-sm text-gray-600 hover:text-primary hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
+                title="Cambiar local"
+              >
+                Cambiar local
+              </button>
 
               <div className="hidden md:block text-right">
                 <p className="text-sm font-medium text-dark">
@@ -364,7 +462,7 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Control de Horarios - MODIFICADO: Pasar props de observaciones */}
+        {/* Control de Horarios */}
         {localActual && (
           <RegistroHorarios 
             localId={localActual.id}
@@ -378,7 +476,6 @@ const Dashboard = () => {
         {/* Botones de Reportes */}
         {localActual && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-            {/* Botón Reporte de Estado */}
             <div className="card">
               <button
                 onClick={() => setModalReporteEstado(true)}
@@ -392,7 +489,6 @@ const Dashboard = () => {
               </p>
             </div>
 
-            {/* Botón Cierre del Día */}
             <div className="card bg-red-50 border-2 border-red-300">
               <button
                 onClick={() => setModalCierreDia(true)}
@@ -422,7 +518,6 @@ const Dashboard = () => {
             <p className="text-gray-500 text-center py-4">No hay personal en turno</p>
           ) : (
             empleadosEnTurno.map((emp, index) => {
-              // Formatear hora de entrada a HH:MM
               const horaEntrada = emp.hora_entrada.includes('T') 
                 ? new Date(emp.hora_entrada).toLocaleTimeString('es-AR', { 
                     hour: '2-digit', 
@@ -562,7 +657,7 @@ const Dashboard = () => {
         </Modal>
       )}
 
-      {/* Modal Cierre del Día - MODIFICADO: Pasar observaciones */}
+      {/* Modal Cierre del Día */}
       {modalCierreDia && localActual && (
         <Modal
           isOpen={true}
