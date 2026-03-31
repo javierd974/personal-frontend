@@ -4,6 +4,7 @@ import { supabase } from './services/supabase'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Administracion from './pages/Administracion'
+import Kiosco from './pages/Kiosco'
 import LoadingSpinner from './components/common/LoadingSpinner'
 
 // Componente de ruta protegida
@@ -37,6 +38,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/kiosco" element={<Kiosco />} />
         <Route
           path="/dashboard"
           element={

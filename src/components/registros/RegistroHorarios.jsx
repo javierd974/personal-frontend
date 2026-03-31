@@ -15,6 +15,7 @@ import { registrosService } from '../../services/registrosService'
 import { rolesService, valesService, ausenciasService, motivosAusenciaService, motivosValesService, observacionesTurnoService } from '../../services/catalogosService'
 import LoadingSpinner from '../common/LoadingSpinner'
 import Modal from '../common/Modal'
+import IdentificacionBiometrica from './IdentificacionBiometrica'
 import { format } from 'date-fns'
 
 const RegistroHorarios = ({ localId, onUpdate, onAlert, observaciones, onObservacionesChange }) => {
@@ -296,6 +297,24 @@ const RegistroHorarios = ({ localId, onUpdate, onAlert, observaciones, onObserva
       {/* ── Búsqueda e ingreso ────────────────────────────────────────────── */}
       <div className="card">
         <h3 className="text-xl font-bold text-dark mb-4">Control de Horarios</h3>
+
+        {/* ── Identificación biométrica ─────────────────────────────────── */}
+        <div className="mb-4">
+          <IdentificacionBiometrica
+            onEmpleadoIdentificado={(empleado) => {
+              setEmpleadoSeleccionado(empleado)
+              setBusqueda(`${empleado.nombre} ${empleado.apellido}`)
+              setModalRol(true)
+            }}
+            onAlert={onAlert}
+          />
+          <div className="flex items-center gap-3 my-4">
+            <div className="flex-1 border-t border-gray-200" />
+            <span className="text-xs text-gray-400 font-medium uppercase tracking-wide">o búsqueda manual</span>
+            <div className="flex-1 border-t border-gray-200" />
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="md:col-span-2 relative">
             <label className="label">Nombre y Apellido</label>
