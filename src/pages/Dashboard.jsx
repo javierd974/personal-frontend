@@ -13,7 +13,8 @@ import {
   Settings,
   X,
   ClipboardList,
-  MapPin
+  MapPin,
+  History
 } from 'lucide-react'
 import { authService } from '../services/authService'
 import { localesService } from '../services/catalogosService'
@@ -51,6 +52,9 @@ const Dashboard = () => {
   const [modalReporteEstado, setModalReporteEstado] = useState(false)
   const [detalleVales, setDetalleVales] = useState([])
   const [detalleAusencias, setDetalleAusencias] = useState([])
+  const [historialVales, setHistorialVales] = useState([])
+  const [mostrarHistorial, setMostrarHistorial] = useState(false)
+  const [loadingHistorial, setLoadingHistorial] = useState(false)
 
   // Timeout de sesión: máximo 60 minutos en el dashboard
   useEffect(() => {
@@ -161,6 +165,8 @@ const Dashboard = () => {
   }
 
   const abrirModalVales = async () => {
+    setMostrarHistorial(false)
+    setHistorialVales([])
     try {
       const result = await valesService.getValesDelDia(localActual.id)
       if (result.success) {
@@ -169,6 +175,33 @@ const Dashboard = () => {
       }
     } catch (error) {
       console.error('Error al cargar vales:', error)
+    }
+  }
+
+  const cargarHistorialVales = async () => {
+    if (!localActual) return
+    setLoadingHistorial(true)
+    try {
+      const { supabase } = await import('../services/supabase')
+      const fechaDesde = new Date()
+      fechaDesde.setDate(fechaDesde.getDate() - 40)
+      const fechaDesdeStr = fechaDesde.toISOString().split('T')[0]
+      const { data, error } = await supabase
+        .from('vales_caja')
+        .select(`
+          id, fecha, importe, concepto, created_at,
+          empleado:empleados(nombre, apellido),
+          motivo:motivos_vales(motivo)
+        `)
+        .eq('local_id', localActual.id)
+        .gte('fecha', fechaDesdeStr)
+        .order('fecha', { ascending: false })
+        .order('created_at', { ascending: false })
+      if (!error) setHistorialVales(data || [])
+    } catch (err) {
+      console.error('Error al cargar historial:', err)
+    } finally {
+      setLoadingHistorial(false)
     }
   }
 
@@ -558,7 +591,7 @@ const Dashboard = () => {
       {/* Modal Vales del Día */}
       <Modal
         isOpen={modalVales}
-        onClose={() => setModalVales(false)}
+        onClose={() => { setModalVales(false); setMostrarHistorial(false); setHistorialVales([]) }}
         title="Vales del Día"
       >
         <div className="space-y-3">
@@ -597,6 +630,97 @@ const Dashboard = () => {
                 </div>
               </div>
             </>
+          )}
+
+          {/* Botón historial */}
+          <div className="pt-2 border-t border-gray-100">
+            <button
+              onClick={async () => {
+                if (!mostrarHistorial) {
+                  setMostrarHistorial(true)
+                  await cargarHistorialVales()
+                } else {
+                  setMostrarHistorial(false)
+                }
+              }}
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 text-sm font-medium text-gray-600 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors border border-gray-200"
+            >
+              <History className="w-4 h-4" />
+              {mostrarHistorial ? 'Ocultar historial' : 'Ver historial últimos 40 días'}
+            </button>
+          </div>
+
+          {/* Historial expandible */}
+          {mostrarHistorial && (
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold text-dark flex items-center gap-2">
+                <History className="w-4 h-4 text-primary" />
+                Historial últimos 40 días
+              </h4>
+
+              {loadingHistorial ? (
+                <div className="flex justify-center py-6">
+                  <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full" />
+                </div>
+              ) : historialVales.length === 0 ? (
+                <p className="text-gray-400 text-sm text-center py-4">Sin vales en los últimos 40 días</p>
+              ) : (
+                <>
+                  {/* Resumen total historial */}
+                  <div className="flex justify-between items-center bg-secondary/5 rounded-lg px-4 py-2 mb-1">
+                    <span className="text-xs text-gray-500">{historialVales.length} vales en 40 días</span>
+                    <span className="text-sm font-bold text-secondary">
+                      ${historialVales.reduce((s, v) => s + Math.round(parseFloat(v.importe)), 0).toLocaleString('es-AR')}
+                    </span>
+                  </div>
+
+                  {/* Lista agrupada por fecha */}
+                  {(() => {
+                    // Agrupar por fecha
+                    const porFecha = historialVales.reduce((acc, vale) => {
+                      const f = vale.fecha
+                      if (!acc[f]) acc[f] = []
+                      acc[f].push(vale)
+                      return acc
+                    }, {})
+
+                    return Object.entries(porFecha).map(([fecha, valesDelDia]) => {
+                      const totalDia = valesDelDia.reduce((s, v) => s + Math.round(parseFloat(v.importe)), 0)
+                      const fechaFormateada = new Date(fecha + 'T12:00:00').toLocaleDateString('es-AR', {
+                        weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric'
+                      })
+                      return (
+                        <div key={fecha} className="border border-gray-100 rounded-lg overflow-hidden">
+                          {/* Header de fecha */}
+                          <div className="flex justify-between items-center px-3 py-2 bg-gray-50 border-b border-gray-100">
+                            <span className="text-xs font-semibold text-gray-600 capitalize">{fechaFormateada}</span>
+                            <span className="text-xs font-bold text-secondary">
+                              ${totalDia.toLocaleString('es-AR')}
+                            </span>
+                          </div>
+                          {/* Vales del día */}
+                          {valesDelDia.map((vale) => (
+                            <div key={vale.id} className="flex items-center justify-between px-3 py-2 hover:bg-gray-50 border-b border-gray-50 last:border-0">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-dark truncate">
+                                  {vale.empleado.nombre} {vale.empleado.apellido}
+                                </p>
+                                <p className="text-xs text-gray-400 truncate">
+                                  {vale.motivo?.motivo || vale.concepto || '—'}
+                                </p>
+                              </div>
+                              <span className="text-sm font-bold text-secondary ml-3 flex-shrink-0">
+                                ${Math.round(parseFloat(vale.importe)).toLocaleString('es-AR')}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    })
+                  })()}
+                </>
+              )}
+            </div>
           )}
         </div>
       </Modal>
