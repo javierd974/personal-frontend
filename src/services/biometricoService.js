@@ -1,5 +1,5 @@
 ﻿// Llamada directa al WebAPI de SecuGen â€” certificado instalado en Windows via certutil
-const WEBAPI_URL = 'https://127.0.0.1:8443'
+const WEBAPI_URL = 'https://localhost:8443'
 
 export const biometricoService = {
 
