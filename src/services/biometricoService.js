@@ -1,5 +1,6 @@
 ﻿// Llamada directa al WebAPI de SecuGen â€” certificado instalado en Windows via certutil
-const WEBAPI_URL = 'https://localhost:8443'
+// HTTP puerto 8000 — sin certificado, funciona en cualquier contexto de Chrome
+const WEBAPI_URL = 'http://127.0.0.1:8000'
 
 export const biometricoService = {
 
@@ -83,8 +84,13 @@ export const biometricoService = {
   },
 
   async getHuellasActivas() {
-    const { supabase } = await import('./supabase')
-    const { data, error } = await supabase
+    const { createClient } = await import('@supabase/supabase-js')
+    // Usar cliente anon directo para que funcione sin sesión (kiosco)
+    const supabaseAnon = createClient(
+      import.meta.env.VITE_SUPABASE_URL,
+      import.meta.env.VITE_SUPABASE_ANON_KEY
+    )
+    const { data, error } = await supabaseAnon
       .from('huellas_empleados')
       .select('empleado_id, dedo, template_iso')
       .eq('activo', true)

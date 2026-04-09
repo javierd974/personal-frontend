@@ -1,7 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { biometricoService } from '../services/biometricoService'
 import { registrosService } from '../services/registrosService'
-import { rolesService } from '../services/catalogosService'
+import { rolesService, localesService } from '../services/catalogosService'
+import { createClient } from '@supabase/supabase-js'
+
+// Cliente Supabase anon para el kiosco (funciona sin sesión)
+const supabaseKiosco = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+)
 
 const ESTADOS = {
   LISTO:        'listo',
@@ -25,16 +32,46 @@ export default function Kiosco() {
   const [rolSeleccionado, setRolSeleccionado] = useState(null)
   const [mensaje, setMensaje]             = useState('')
   const [localId, setLocalId]             = useState(null)
+  const [localNombre, setLocalNombre]     = useState('')
+  const [locales, setLocales]             = useState([])
+  const [eligiendoLocal, setEligiendoLocal] = useState(false)
   const timeoutRef                        = useRef(null)
+  const STORAGE_KEY = 'kiosco_local_id'
+  const STORAGE_NOMBRE = 'kiosco_local_nombre'
 
   useEffect(() => {
-    // Leer localId desde URL: /kiosco?local=UUID
+    // 1. Intentar leer local guardado en localStorage
+    const lidGuardado = localStorage.getItem(STORAGE_KEY)
+    const nombreGuardado = localStorage.getItem(STORAGE_NOMBRE)
+    // 2. Leer también desde URL (tiene prioridad)
     const params = new URLSearchParams(window.location.search)
-    const lid = params.get('local')
-    if (lid) setLocalId(lid)
+    const lidUrl = params.get('local')
+    const lid = lidUrl || lidGuardado
+    if (lid) {
+      setLocalId(lid)
+      setLocalNombre(nombreGuardado || '')
+      localStorage.setItem(STORAGE_KEY, lid)
+    }
     rolesService.getRoles().then(r => { if (r.success) setRoles(r.data) })
+    // También cargar roles con supabaseKiosco como fallback
+    supabaseKiosco.from('roles').select('*').eq('activo', true).order('nombre')
+      .then(({ data }) => { if (data?.length) setRoles(data) })
     return () => clearTimeout(timeoutRef.current)
   }, [])
+
+  const abrirSelectorLocal = async () => {
+    const result = await localesService.getLocalesUsuario()
+    if (result.success) setLocales(result.data)
+    setEligiendoLocal(true)
+  }
+
+  const elegirLocal = (local) => {
+    setLocalId(local.id)
+    setLocalNombre(local.nombre)
+    localStorage.setItem(STORAGE_KEY, local.id)
+    localStorage.setItem(STORAGE_NOMBRE, local.nombre)
+    setEligiendoLocal(false)
+  }
 
   const resetear = (delay = 0) => {
     clearTimeout(timeoutRef.current)
@@ -80,8 +117,7 @@ export default function Kiosco() {
     }
 
     // Traer datos del empleado incluyendo su rol por defecto
-    const { supabase } = await import('../services/supabase')
-    const { data: emp } = await supabase
+    const { data: emp } = await supabaseKiosco
       .from('empleados')
       .select('*, rol:roles(id, nombre)')
       .eq('id', match.empleado_id)
@@ -106,30 +142,54 @@ export default function Kiosco() {
   const procesarEntradaDirecta = async (emp, rol) => {
     if (!localId) return
     setEstado(ESTADOS.PROCESANDO)
-    const result = await registrosService.registrarEntrada(emp.id, localId, rol.id, '')
-    if (result.success) {
-      setRegistro(result.data)
+    const ahora = new Date().toISOString()
+    const fecha = ahora.split('T')[0]
+    const { data, error } = await supabaseKiosco
+      .from('registros_horarios')
+      .insert({
+        empleado_id: emp.id,
+        local_id: localId,
+        rol_id: rol.id,
+        fecha,
+        hora_entrada: ahora,
+        metodo_registro: 'biometrico'
+      })
+      .select('*, rol:roles(nombre)')
+      .single()
+    if (!error) {
+      setRegistro(data)
       setEstado(ESTADOS.EXITO)
       resetear(4000)
     } else {
       setEstado(ESTADOS.ERROR)
-      setMensaje(result.error)
+      setMensaje(error.message)
       resetear(4000)
     }
   }
 
   const procesarEntrada = async (rol) => {
-    if (!empleado || !localId) return
-    setRolSeleccionado(rol)
     setEstado(ESTADOS.PROCESANDO)
-    const result = await registrosService.registrarEntrada(empleado.id, localId, rol.id, '')
-    if (result.success) {
-      setRegistro(result.data)
+    const ahora = new Date().toISOString()
+    const fecha = ahora.split('T')[0]
+    const { data, error } = await supabaseKiosco
+      .from('registros_horarios')
+      .insert({
+        empleado_id: empleado.id,
+        local_id: localId,
+        rol_id: rol.id,
+        fecha,
+        hora_entrada: ahora,
+        metodo_registro: 'biometrico'
+      })
+      .select('*, rol:roles(nombre)')
+      .single()
+    if (!error) {
+      setRegistro(data)
       setEstado(ESTADOS.EXITO)
       resetear(4000)
     } else {
       setEstado(ESTADOS.ERROR)
-      setMensaje(result.error)
+      setMensaje(error.message)
       resetear(4000)
     }
   }
@@ -137,8 +197,7 @@ export default function Kiosco() {
   const procesarSalida = async (emp) => {
     setEstado(ESTADOS.PROCESANDO)
     // Buscar registro abierto del empleado
-    const { supabase } = await import('../services/supabase')
-    const { data: regAbierto } = await supabase
+    const { data: regAbierto } = await supabaseKiosco
       .from('registros_horarios')
       .select('*, rol:roles(nombre)')
       .eq('empleado_id', emp.id)
@@ -152,14 +211,19 @@ export default function Kiosco() {
       return
     }
 
-    const result = await registrosService.registrarSalida(regAbierto.id)
-    if (result.success) {
+    const result = await supabaseKiosco
+      .from('registros_horarios')
+      .update({ hora_salida: new Date().toISOString() })
+      .eq('id', regAbierto.id)
+      .select()
+      .single()
+    if (!result.error) {
       setRegistro(regAbierto)
       setEstado(ESTADOS.EXITO)
       resetear(4000)
     } else {
       setEstado(ESTADOS.ERROR)
-      setMensaje(result.error)
+      setMensaje(result.error.message)
       resetear(4000)
     }
   }
@@ -171,10 +235,47 @@ export default function Kiosco() {
       {/* Fondo con textura sutil */}
       <div style={estilos.fondo} />
 
+      {/* Selector de local — pantalla inicial si no hay local */}
+      {eligiendoLocal && (
+        <div style={estilos.selectorOverlay}>
+          <div style={estilos.selectorBox}>
+            <p style={estilos.selectorTitulo}>Seleccioná el local</p>
+            {locales.map(loc => (
+              <button key={loc.id} style={estilos.selectorBtn} onClick={() => elegirLocal(loc)}>
+                {loc.nombre}
+              </button>
+            ))}
+            {localId && (
+              <button style={estilos.cancelarBtn} onClick={() => setEligiendoLocal(false)}>Cancelar</button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Pantalla de bienvenida si no hay local aún */}
+      {!localId && !eligiendoLocal && (
+        <div style={estilos.selectorOverlay}>
+          <div style={estilos.selectorBox}>
+            <p style={estilos.selectorTitulo}>Kiosco Biométrico</p>
+            <p style={{color:'#64748b', marginBottom:'24px', fontSize:'15px'}}>Para comenzar, seleccioná el local</p>
+            <button style={{...estilos.selectorBtn, background:'#1d4ed8'}} onClick={abrirSelectorLocal}>
+              Seleccionar local
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header — reloj y local */}
       <header style={estilos.header}>
         <div style={estilos.marca}>LOS NOTABLES</div>
-        <div style={estilos.reloj}>{hora}</div>
+        <div style={{display:'flex', alignItems:'center', gap:'16px'}}>
+          {localNombre && (
+            <button onClick={abrirSelectorLocal} style={estilos.localBtn}>
+              {localNombre} ▾
+            </button>
+          )}
+          <div style={estilos.reloj}>{hora}</div>
+        </div>
       </header>
 
       {/* Display central — estado actual */}
@@ -222,7 +323,6 @@ export default function Kiosco() {
       {/* Footer */}
       <footer style={estilos.footer}>
         <span>SmartDom · Sistema Biométrico</span>
-        {!localId && <span style={{color:'#ef4444'}}> · Sin local configurado</span>}
       </footer>
     </div>
   )
@@ -482,6 +582,54 @@ const estilos = {
     background: 'transparent',
     color: '#475569',
     fontSize: '14px',
+    cursor: 'pointer',
+    letterSpacing: '0.05em',
+  },
+  selectorOverlay: {
+    position: 'fixed', inset: 0,
+    background: '#0a0f1aee',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    zIndex: 100,
+  },
+  selectorBox: {
+    background: '#0d1520',
+    border: '1px solid #1e293b',
+    borderRadius: '24px',
+    padding: '48px 40px',
+    minWidth: '320px',
+    maxWidth: '480px',
+    width: '100%',
+    textAlign: 'center',
+    display: 'flex', flexDirection: 'column', gap: '12px',
+  },
+  selectorTitulo: {
+    fontSize: '26px',
+    fontWeight: '700',
+    color: '#e2e8f0',
+    marginBottom: '8px',
+    letterSpacing: '-0.02em',
+  },
+  selectorBtn: {
+    padding: '18px 24px',
+    borderRadius: '14px',
+    border: '1px solid #334155',
+    background: '#1e293b',
+    color: '#e2e8f0',
+    fontSize: '17px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    letterSpacing: '0.02em',
+    transition: 'background 0.15s ease',
+    width: '100%',
+  },
+  localBtn: {
+    padding: '6px 14px',
+    borderRadius: '8px',
+    border: '1px solid #1e293b',
+    background: '#0d1520',
+    color: '#64748b',
+    fontSize: '12px',
+    fontWeight: '600',
     cursor: 'pointer',
     letterSpacing: '0.05em',
   },

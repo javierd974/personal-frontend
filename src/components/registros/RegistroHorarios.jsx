@@ -196,12 +196,201 @@ const RegistroHorarios = ({ localId, onUpdate, onAlert, observaciones, onObserva
     finally { setLoading(false) }
   }
 
+  const imprimirVale = (valeData) => {
+    const { empleado, importe, motivo, concepto, localNombre, fecha } = valeData
+    const fechaFormateada = new Date(fecha + 'T12:00:00').toLocaleDateString('es-AR', {
+      day: '2-digit', month: '2-digit', year: 'numeric'
+    })
+    const importeFormateado = `$${Math.round(importe).toLocaleString('es-AR')}`
+
+    const ventana = window.open('', '', 'width=340,height=600')
+    ventana.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Vale</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&display=swap');
+    @page { size: 80mm auto; margin: 0; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'IBM Plex Mono', 'Courier New', monospace;
+      width: 72mm;
+      padding: 4mm 3mm;
+      background: #fff;
+      color: #000;
+      font-size: 9pt;
+      line-height: 1.35;
+    }
+    .encabezado {
+      text-align: center;
+      border-bottom: 2px solid #000;
+      padding-bottom: 3mm;
+      margin-bottom: 3mm;
+    }
+    .titulo {
+      font-size: 13pt;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .subtitulo {
+      font-size: 8pt;
+      letter-spacing: 0.08em;
+      color: #333;
+      margin-top: 1mm;
+    }
+    .local-nombre {
+      font-size: 9pt;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      margin-top: 1.5mm;
+    }
+    .fecha-linea {
+      font-size: 8pt;
+      color: #555;
+      margin-top: 0.5mm;
+    }
+    .separador {
+      border: none;
+      border-top: 1px dashed #999;
+      margin: 2.5mm 0;
+    }
+    .separador-solido {
+      border: none;
+      border-top: 2px solid #000;
+      margin: 2.5mm 0;
+    }
+    .campo-label {
+      font-size: 7.5pt;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #666;
+      margin-bottom: 0.5mm;
+    }
+    .campo-valor {
+      font-size: 13pt;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      line-height: 1.2;
+      word-break: break-word;
+    }
+    .campo-valor.motivo {
+      font-size: 11pt;
+    }
+    .campo-bloque {
+      margin-bottom: 3mm;
+    }
+    .importe-bloque {
+      background: #000;
+      color: #fff;
+      text-align: center;
+      padding: 3mm 2mm;
+      border-radius: 1mm;
+      margin: 3mm 0;
+    }
+    .importe-label {
+      font-size: 7.5pt;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      opacity: 0.7;
+      margin-bottom: 1mm;
+    }
+    .importe-valor {
+      font-size: 22pt;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1;
+    }
+    .obs-bloque {
+      margin-top: 3mm;
+    }
+    .obs-valor {
+      font-size: 8.5pt;
+      font-weight: 600;
+      color: #222;
+      word-break: break-word;
+      line-height: 1.4;
+    }
+    .firma-zona {
+      margin-top: 18mm;
+      text-align: center;
+    }
+    .firma-linea {
+      border-top: 1px solid #000;
+      width: 55mm;
+      margin: 0 auto 1.5mm;
+    }
+    .firma-label {
+      font-size: 7.5pt;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #555;
+    }
+    .pie {
+      text-align: center;
+      margin-top: 4mm;
+      padding-top: 2.5mm;
+      border-top: 1px dashed #ccc;
+      font-size: 7pt;
+      color: #aaa;
+      letter-spacing: 0.08em;
+    }
+  </style>
+</head>
+<body>
+  <div class="encabezado">
+    <div class="titulo">VALE DE CAJA</div>
+    <div class="subtitulo">COMPROBANTE INTERNO</div>
+    <div class="local-nombre">${localNombre.toUpperCase()}</div>
+    <div class="fecha-linea">${fechaFormateada}</div>
+  </div>
+
+  <div class="campo-bloque">
+    <div class="campo-label">Empleado</div>
+    <div class="campo-valor">${empleado}</div>
+  </div>
+
+  <hr class="separador"/>
+
+  <div class="campo-bloque">
+    <div class="campo-label">Motivo</div>
+    <div class="campo-valor motivo">${motivo}</div>
+  </div>
+
+  ${concepto ? `
+  <div style="border-top:1px dashed #bbb;margin:2.5mm 0;"></div>
+  <div class="obs-bloque">
+    <div class="campo-label">Observaciones</div>
+    <div class="obs-valor">${concepto}</div>
+  </div>` : ''}
+
+  <hr class="separador-solido"/>
+
+  <div class="importe-bloque">
+    <div class="importe-label">Importe recibido</div>
+    <div class="importe-valor">${importeFormateado}</div>
+  </div>
+
+  <div class="firma-zona">
+    <div class="firma-linea"></div>
+    <div class="firma-label">Firma y aclaración</div>
+  </div>
+
+  <div class="pie">SmartDom · smartdom.io</div>
+</body>
+</html>`)
+    ventana.document.close()
+    setTimeout(() => { ventana.print(); ventana.close() }, 350)
+  }
+
   const registrarVale = async () => {
     if (!empleadoSeleccionadoVale || !formVale.motivoId || !formVale.importe) {
       onAlert({ type: 'error', message: 'Completá empleado, motivo e importe' }); return
     }
     setLoading(true)
     try {
+      const motivoObj = motivosVales.find(m => m.id === formVale.motivoId)
       const result = await valesService.registrarVale({
         empleado_id: empleadoSeleccionadoVale.id,
         local_id: localId,
@@ -211,6 +400,17 @@ const RegistroHorarios = ({ localId, onUpdate, onAlert, observaciones, onObserva
       })
       if (result.success) {
         onAlert({ type: 'success', message: 'Vale registrado correctamente' })
+        // Imprimir vale
+        const { localesService } = await import('../../services/catalogosService')
+        const localResult = await localesService.getLocalById(localId)
+        imprimirVale({
+          empleado: `${empleadoSeleccionadoVale.nombre} ${empleadoSeleccionadoVale.apellido}`,
+          importe: parseInt(formVale.importe),
+          motivo: motivoObj?.motivo || '',
+          concepto: formVale.concepto,
+          localNombre: localResult.success ? localResult.data.nombre : '',
+          fecha: new Date().toISOString().split('T')[0]
+        })
         setModalVale(false)
         setBusquedaVale(''); setEmpleadoSeleccionadoVale(null)
         setFormVale({ empleadoId: '', motivoId: '', importe: '', concepto: '' })
