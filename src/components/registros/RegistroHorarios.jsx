@@ -220,6 +220,7 @@ const RegistroHorarios = ({ localId, onUpdate, onAlert, observaciones, onObserva
       background: #fff;
       color: #000;
       font-size: 9pt;
+      font-weight: 700;
       line-height: 1.35;
     }
     .encabezado {
@@ -247,9 +248,10 @@ const RegistroHorarios = ({ localId, onUpdate, onAlert, observaciones, onObserva
       margin-top: 1.5mm;
     }
     .fecha-linea {
-      font-size: 8pt;
-      color: #555;
-      margin-top: 0.5mm;
+      font-size: 11pt;
+      font-weight: 700;
+      color: #000;
+      margin-top: 1mm;
     }
     .separador {
       border: none;
@@ -282,22 +284,23 @@ const RegistroHorarios = ({ localId, onUpdate, onAlert, observaciones, onObserva
       margin-bottom: 3mm;
     }
     .importe-bloque {
-      background: #000;
-      color: #fff;
+      background: #fff;
+      color: #000;
       text-align: center;
       padding: 3mm 2mm;
+      border: 2px solid #000;
       border-radius: 1mm;
       margin: 3mm 0;
     }
     .importe-label {
       font-size: 7.5pt;
+      font-weight: 700;
       letter-spacing: 0.15em;
       text-transform: uppercase;
-      opacity: 0.7;
       margin-bottom: 1mm;
     }
     .importe-valor {
-      font-size: 22pt;
+      font-size: 26pt;
       font-weight: 700;
       letter-spacing: -0.02em;
       line-height: 1;
