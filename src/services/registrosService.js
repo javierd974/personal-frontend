@@ -269,6 +269,22 @@ export const registrosService = {
     }
   },
 
+  // Marcar / desmarcar un registro como franco trabajado
+  async marcarFrancoTrabajado(registroId, esFranco) {
+    try {
+      const { data, error } = await supabase
+        .from('registros_horarios')
+        .update({ es_franco: esFranco })
+        .eq('id', registroId)
+        .select('id, es_franco')
+        .single()
+      if (error) throw error
+      return { success: true, data }
+    } catch (error) {
+      return { success: false, error: handleSupabaseError(error) }
+    }
+  },
+
   // Verificar si un empleado puede registrar entrada
   async puedeRegistrarEntrada(empleadoId) {
     try {

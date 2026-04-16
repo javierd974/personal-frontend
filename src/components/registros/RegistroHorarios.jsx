@@ -8,7 +8,9 @@ import {
   DollarSign,
   UserMinus,
   Trash2,
-  Lock
+  Lock,
+  ToggleLeft,
+  ToggleRight
 } from 'lucide-react'
 import { empleadosService } from '../../services/empleadosService'
 import { registrosService } from '../../services/registrosService'
@@ -194,6 +196,40 @@ const RegistroHorarios = ({ localId, onUpdate, onAlert, observaciones, onObserva
       } else { onAlert({ type: 'error', message: result.error }) }
     } catch { onAlert({ type: 'error', message: 'Error al registrar salida' }) }
     finally { setLoading(false) }
+  }
+
+  const [modalFranco, setModalFranco] = useState(null) // { registroId, empleadoNombre, valorActual }
+
+  const marcarFranco = (registroId, valorActual, empleadoNombre) => {
+    if (valorActual) {
+      // Si ya está marcado, desmarcar directo sin confirmar
+      ejecutarMarcarFranco(registroId, false)
+    } else {
+      // Si va a marcarse, pedir confirmación
+      setModalFranco({ registroId, empleadoNombre, valorActual })
+    }
+  }
+
+  const ejecutarMarcarFranco = async (registroId, nuevoValor) => {
+    const valorActual = !nuevoValor
+    setModalFranco(null)
+    // Optimistic update local
+    setRegistrosHoy(prev => prev.map(r =>
+      r.id === registroId ? { ...r, es_franco: nuevoValor } : r
+    ))
+    const result = await registrosService.marcarFrancoTrabajado(registroId, nuevoValor)
+    if (!result.success) {
+      // Revertir si falló
+      setRegistrosHoy(prev => prev.map(r =>
+        r.id === registroId ? { ...r, es_franco: valorActual } : r
+      ))
+      onAlert({ type: 'error', message: 'Error al actualizar estado de franco' })
+    } else {
+      onAlert({
+        type: nuevoValor ? 'success' : 'info',
+        message: nuevoValor ? '🗓️ Franco trabajado marcado correctamente' : 'Franco trabajado desmarcado'
+      })
+    }
   }
 
   const imprimirVale = (valeData) => {
@@ -600,15 +636,24 @@ const RegistroHorarios = ({ localId, onUpdate, onAlert, observaciones, onObserva
             <table className="min-w-full">
               <thead className="bg-gray-50">
                 <tr>
-                  {['Empleado','Rol','Entrada','Salida','Horas','Acción'].map(h => (
-                    <th key={h} className={`px-4 py-3 text-sm font-medium text-gray-600 ${h === 'Acción' ? 'text-center' : 'text-left'}`}>{h}</th>
+                  {['Empleado','Rol','Entrada','Salida','Horas','Franco Trabajado','Acción'].map(h => (
+                    <th key={h} className={`px-4 py-3 text-sm font-medium text-gray-600 ${h === 'Acción' || h === 'Franco Trabajado' ? 'text-center' : 'text-left'}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {registrosHoy.map((registro) => (
-                  <tr key={registro.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm">{registro.empleado.nombre} {registro.empleado.apellido}</td>
+                  <tr key={registro.id} className={`transition-colors ${registro.es_franco ? 'bg-rose-50 hover:bg-rose-100/60' : 'hover:bg-gray-50'}`}>
+                    <td className="px-4 py-3 text-sm">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium">{registro.empleado.nombre} {registro.empleado.apellido}</span>
+                        {registro.es_franco && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-[#7B1C2E] text-white border border-[#5a1221]">
+                            🗓️ Franco Trabajado
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-sm text-gray-600">{registro.rol.nombre}</td>
                     <td className="px-4 py-3 text-sm font-medium text-primary">{formatearHora(registro.hora_entrada)}</td>
                     <td className="px-4 py-3 text-sm">
@@ -617,6 +662,22 @@ const RegistroHorarios = ({ localId, onUpdate, onAlert, observaciones, onObserva
                         : <span className="text-green-600 font-medium">EN TURNO</span>}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">{registro.horas_trabajadas || '-'}</td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        onClick={() => marcarFranco(registro.id, registro.es_franco || false, `${registro.empleado.nombre} ${registro.empleado.apellido}`)}
+                        title={registro.es_franco ? 'Quitar Franco Trabajado' : 'Marcar como Franco Trabajado'}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
+                          registro.es_franco
+                            ? 'bg-[#7B1C2E] border-[#5a1221] text-white hover:bg-[#6a1828]'
+                            : 'bg-gray-100 border-gray-200 text-gray-400 hover:bg-gray-200 hover:text-gray-600'
+                        }`}
+                      >
+                        {registro.es_franco
+                          ? <><ToggleRight className="w-4 h-4" /> Franco Trabajado</>
+                          : <><ToggleLeft className="w-4 h-4" /> Franco Trabajado</>
+                        }
+                      </button>
+                    </td>
                     <td className="px-4 py-3 text-center">
                       {!registro.hora_salida && (
                         <button onClick={() => registrarSalida(registro.id)} className="btn-icon text-red-600 hover:bg-red-50" title="Registrar salida">
@@ -848,6 +909,51 @@ const RegistroHorarios = ({ localId, onUpdate, onAlert, observaciones, onObserva
           <button onClick={handleGuardarObservaciones} className="btn-primary w-full">Guardar Observaciones</button>
         </div>
       </Modal>
+
+      {/* ── Modal Confirmación Franco Trabajado ───────────────────────────── */}
+      {modalFranco && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4"
+          onClick={() => setModalFranco(null)}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full animate-slide-in"
+            onClick={e => e.stopPropagation()}>
+            {/* Header bordó */}
+            <div className="flex items-center gap-3 px-6 py-5 rounded-t-xl" style={{ backgroundColor: '#7B1C2E' }}>
+              <span className="text-2xl">🗓️</span>
+              <h2 className="text-lg font-bold text-white">Franco Trabajado</h2>
+            </div>
+            {/* Cuerpo */}
+            <div className="px-6 py-6 space-y-4">
+              <p className="text-gray-700 text-sm leading-relaxed">
+                Usted está confirmando que el empleado:
+              </p>
+              <div className="bg-rose-50 border border-rose-200 rounded-lg px-4 py-3">
+                <p className="font-bold text-gray-900 text-base">{modalFranco.empleadoNombre}</p>
+              </div>
+              <p className="text-gray-700 text-sm leading-relaxed">
+                está trabajando en su <span className="font-semibold text-gray-900">día de franco</span>. Esta acción quedará registrada en el sistema y se verá reflejada en los reportes de RRHH.
+              </p>
+            </div>
+            {/* Botones */}
+            <div className="flex gap-3 px-6 pb-6">
+              <button
+                onClick={() => setModalFranco(null)}
+                className="flex-1 btn-outline"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => ejecutarMarcarFranco(modalFranco.registroId, true)}
+                className="flex-1 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+                style={{ backgroundColor: '#7B1C2E' }}
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#6a1828'}
+                onMouseLeave={e => e.currentTarget.style.backgroundColor = '#7B1C2E'}
+              >
+                Confirmar Franco Trabajado
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

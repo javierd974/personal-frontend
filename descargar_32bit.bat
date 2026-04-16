@@ -1,0 +1,3 @@
+@echo off
+title Descargando componentes SecuGen...
+powershell -ExecutionPolicy Bypass -File "%~dp0descargar_componentes.ps1"

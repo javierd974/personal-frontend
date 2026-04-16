@@ -10,14 +10,12 @@ echo   Sistema Biometrico Los Notables
 echo  ============================================================
 echo.
 
-:: Verificar que se ejecuta como administrador
+:: Verificar administrador
 net session >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
     echo  [ERROR] Ejecutar como Administrador
     echo  Clic derecho sobre este archivo y "Ejecutar como administrador"
-    echo.
-    pause
-    exit /b 1
+    pause & exit /b 1
 )
 
 set SCRIPT_DIR=%~dp0
@@ -25,7 +23,64 @@ set DRIVERS_DIR=%SCRIPT_DIR%drivers
 set APP_DIR=C:\Proyectos\gestion-personal-smartdom
 set ERRORES=0
 
-echo  Directorio de instalacion: %APP_DIR%
+
+:: ── Detectar version de Windows ──────────────────────────────────────────
+echo  Detectando sistema operativo...
+set WIN_VER=modern
+for /f "tokens=4-5 delims=. " %%i in ('ver') do (
+    if "%%i"=="5" set WIN_VER=xp
+    if "%%i"=="6" (
+        if "%%j"=="0" set WIN_VER=vista
+        if "%%j"=="1" set WIN_VER=win7
+        if "%%j"=="2" set WIN_VER=win8
+        if "%%j"=="3" set WIN_VER=win81
+    )
+    if "%%i"=="10" set WIN_VER=win10plus
+)
+echo  Sistema detectado: %WIN_VER%
+
+:: ── Detectar arquitectura ────────────────────────────────────────────────
+set ARCH=x86
+if "%PROCESSOR_ARCHITECTURE%"=="AMD64" set ARCH=x64
+if "%PROCESSOR_ARCHITEW6432%"=="AMD64" set ARCH=x64
+echo  Arquitectura: %ARCH%
+echo.
+
+:: ── Seleccionar instaladores segun SO y arquitectura ─────────────────────
+if "%WIN_VER%"=="win7" (
+    set NODE_FILE=nodejs_win7_%ARCH%.msi
+    set NODE_DESC=Node.js v13.14.0 compatible con Windows 7
+) else if "%WIN_VER%"=="vista" (
+    set NODE_FILE=nodejs_win7_%ARCH%.msi
+    set NODE_DESC=Node.js v13.14.0 compatible con Windows 7
+) else (
+    if "%ARCH%"=="x64" (
+        set NODE_FILE=nodejs_%ARCH%.msi
+        set NODE_DESC=Node.js LTS 64bit
+    ) else (
+        set NODE_FILE=nodejs_%ARCH%.msi
+        set NODE_DESC=Node.js LTS 32bit
+    )
+)
+
+if "%ARCH%"=="x64" (
+    set BWAPI_FILE=SGI_BWAPI_WIN_64bit.exe
+) else (
+    set BWAPI_FILE=SGI_BWAPI_WIN_32bit.exe
+)
+
+:: ── Confirmar seleccion antes de continuar ────────────────────────────────
+echo  ============================================================
+echo   CONFIGURACION DETECTADA:
+echo   - Sistema operativo : %WIN_VER%
+echo   - Arquitectura      : %ARCH%
+echo   - Node.js a usar    : %NODE_FILE%
+echo   - WebAPI a usar     : %BWAPI_FILE%
+echo  ============================================================
+echo.
+echo  Si esto es incorrecto presiona CTRL+C para cancelar.
+echo  Si es correcto presiona cualquier tecla para continuar...
+pause >nul
 echo.
 
 
@@ -33,115 +88,125 @@ echo.
 echo  [1/5] Verificando Node.js...
 node --version >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
-    echo        No encontrado. Descargando Node.js LTS...
-    set NODE_URL=https://nodejs.org/dist/v22.15.0/node-v22.15.0-x64.msi
-    set NODE_MSI=%TEMP%\nodejs_installer.msi
-    powershell -Command "Invoke-WebRequest -Uri '!NODE_URL!' -OutFile '!NODE_MSI!' -UseBasicParsing" 2>nul
-    if exist "!NODE_MSI!" (
-        msiexec /i "!NODE_MSI!" /quiet /norestart
-        del "!NODE_MSI!" >nul 2>&1
+    echo        No encontrado. Instalando %NODE_DESC%...
+    if exist "%DRIVERS_DIR%\%NODE_FILE%" (
+        echo        Usando archivo local: %NODE_FILE%
+        msiexec /i "%DRIVERS_DIR%\%NODE_FILE%" /quiet /norestart ADDLOCAL=ALL
+        :: Actualizar PATH para esta sesion
+        set PATH=%PATH%;C:\Program Files\nodejs;C:\Program Files (x86)\nodejs;%APPDATA%\npm
         echo        Node.js instalado OK
     ) else (
-        echo        [ERROR] No se pudo descargar Node.js
-        echo        Descargar manualmente desde: https://nodejs.org
+        echo        [ERROR] No se encontro %NODE_FILE% en carpeta drivers
+        echo        Copiar el instalador de Node.js a la carpeta drivers\ e intentar de nuevo
         set /a ERRORES+=1
     )
 ) else (
-    for /f %%i in ('node --version') do echo        Ya instalado: %%i
+    for /f %%i in ('node --version 2^>nul') do echo        Ya instalado: %%i
 )
 echo.
 
-:: ── PASO 2: Driver SecuGen HUPx-AP ───────────────────────────────────────
+:: ── PASO 2: Driver SecuGen ────────────────────────────────────────────────
 echo  [2/5] Instalando driver SecuGen HUPx-AP...
 if exist "%DRIVERS_DIR%\WinDrivers_v3001_Installer.zip" (
     echo        Extrayendo driver...
     set DRIVER_TEMP=%TEMP%\SecuGenDriver
-    powershell -Command "Expand-Archive -Path '%DRIVERS_DIR%\WinDrivers_v3001_Installer.zip' -DestinationPath '!DRIVER_TEMP!' -Force" 2>nul
-    :: Buscar y ejecutar el instalador
+    if exist "!DRIVER_TEMP!" rmdir /s /q "!DRIVER_TEMP!"
+
+    :: Extraer ZIP - compatible con Windows 7 usando PowerShell 2+ o VBScript
+    powershell -version 2 -Command "Add-Type -Assembly 'System.IO.Compression.FileSystem'; [System.IO.Compression.ZipFile]::ExtractToDirectory('%DRIVERS_DIR%\WinDrivers_v3001_Installer.zip', '!DRIVER_TEMP!')" 2>nul
+    if not exist "!DRIVER_TEMP!" (
+        :: Fallback VBScript para Windows 7 sin PowerShell moderno
+        echo Set objShell = CreateObject("Shell.Application") > %TEMP%\unzip.vbs
+        echo Set objZip = objShell.NameSpace("%DRIVERS_DIR%\WinDrivers_v3001_Installer.zip") >> %TEMP%\unzip.vbs
+        echo Set objDest = objShell.NameSpace("!DRIVER_TEMP!") >> %TEMP%\unzip.vbs
+        echo objDest.CopyHere objZip.Items >> %TEMP%\unzip.vbs
+        mkdir "!DRIVER_TEMP!" 2>nul
+        cscript //nologo %TEMP%\unzip.vbs
+        del %TEMP%\unzip.vbs 2>nul
+    )
+
+    :: Ejecutar el primer .exe que encuentre
     for /r "!DRIVER_TEMP!" %%f in (*.exe) do (
-        if not "%%~nf"=="." (
-            echo        Ejecutando: %%~nxf
-            start /wait "" "%%f" /S /quiet 2>nul
-            goto :driver_ok
-        )
+        start /wait "" "%%f" /S /quiet 2>nul
+        goto :driver_ok
     )
     :driver_ok
     rmdir /s /q "!DRIVER_TEMP!" 2>nul
-    echo        Driver instalado OK - Se requiere reiniciar
+    echo        Driver instalado OK - Reiniciar PC despues
 ) else (
-    echo        Archivo no encontrado en drivers\
-    echo        Descargando desde SecuGen...
-    powershell -Command "Start-Process 'https://secugen.com/drivers/'" 2>nul
-    echo        Instalar manualmente: UPx-AP Windows Driver v1.0.0.3
+    echo        Driver no encontrado en carpeta drivers\
     set /a ERRORES+=1
 )
 echo.
 
-
-:: ── PASO 3: SecuGen WebAPI (SgiBioSrv) ───────────────────────────────────
-echo  [3/5] Instalando SecuGen WebAPI...
-if exist "%DRIVERS_DIR%\SGI_BWAPI_WIN_64bit.exe" (
-    start /wait "" "%DRIVERS_DIR%\SGI_BWAPI_WIN_64bit.exe" /S /quiet 2>nul
+:: ── PASO 3: SecuGen WebAPI ────────────────────────────────────────────────
+echo  [3/5] Instalando SecuGen WebAPI (%ARCH%)...
+if exist "%DRIVERS_DIR%\%BWAPI_FILE%" (
+    echo        Instalando %BWAPI_FILE%...
+    start /wait "" "%DRIVERS_DIR%\%BWAPI_FILE%" /S /quiet 2>nul
     if exist "C:\Program Files\SecuGen\SgiBioSrv\sgibiosrv.exe" (
-        echo        WebAPI instalado OK
+        echo        WebAPI instalado OK [64bit path]
+    ) else if exist "C:\Program Files (x86)\SecuGen\SgiBioSrv\sgibiosrv.exe" (
+        echo        WebAPI instalado OK [32bit path]
     ) else (
-        echo        Instalando con interfaz grafica...
-        start /wait "" "%DRIVERS_DIR%\SGI_BWAPI_WIN_64bit.exe"
+        echo        Instalando en modo visual...
+        start /wait "" "%DRIVERS_DIR%\%BWAPI_FILE%"
     )
 ) else (
-    echo        Archivo no encontrado. Descargando...
-    set BWAPI_URL=https://webapi.secugen.com/
-    powershell -Command "Start-Process '!BWAPI_URL!'" 2>nul
-    echo        Descargar SGI_BWAPI_WIN_64bit.exe e instalar manualmente
+    echo        [ERROR] No se encontro %BWAPI_FILE% en carpeta drivers\
     set /a ERRORES+=1
 )
 echo.
 
 :: ── PASO 4: Certificado SecuGen ───────────────────────────────────────────
 echo  [4/5] Instalando certificado SecuGen...
-if exist "C:\Program Files\SecuGen\SgiBioSrv\sgca.crt" (
-    powershell -Command "Import-Certificate -FilePath 'C:\Program Files\SecuGen\SgiBioSrv\sgca.crt' -CertStoreLocation Cert:\LocalMachine\Root" >nul 2>&1
+set CERT_PATH=
+if exist "C:\Program Files\SecuGen\SgiBioSrv\sgca.crt" set CERT_PATH=C:\Program Files\SecuGen\SgiBioSrv\sgca.crt
+if exist "C:\Program Files (x86)\SecuGen\SgiBioSrv\sgca.crt" set CERT_PATH=C:\Program Files (x86)\SecuGen\SgiBioSrv\sgca.crt
+if defined CERT_PATH (
+    certutil -addstore "Root" "!CERT_PATH!" >nul 2>&1
     echo        Certificado instalado OK
 ) else (
-    echo        WebAPI no instalado aun. Instalar certificado despues manualmente con:
-    echo        Import-Certificate -FilePath "C:\Program Files\SecuGen\SgiBioSrv\sgca.crt" -CertStoreLocation Cert:\LocalMachine\Root
+    echo        WebAPI no instalado aun - instalar certificado manualmente despues
 )
 echo.
 
-:: ── PASO 5: App SmartDom y acceso directo ────────────────────────────────
+:: ── PASO 5: App y acceso directo ─────────────────────────────────────────
 echo  [5/5] Configurando SmartDom Kiosco...
-
-:: Copiar app si no existe en destino
 if not exist "%APP_DIR%" (
     echo        Copiando aplicacion...
     xcopy /E /I /Q "%SCRIPT_DIR%app" "%APP_DIR%" >nul
 )
 
-:: Instalar dependencias Node
-echo        Instalando dependencias...
-cd /d "%APP_DIR%"
-call npm install --silent >nul 2>&1
+:: Actualizar PATH para npm
+set PATH=%PATH%;C:\Program Files\nodejs;C:\Program Files (x86)\nodejs;%APPDATA%\npm
+
+echo        Instalando dependencias npm...
+call npm install --prefix "%APP_DIR%" --silent >nul 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    echo        Reintentando con ruta directa...
+    cd /d "%APP_DIR%"
+    call npm install --silent >nul 2>&1
+)
 echo        Dependencias OK
 
-:: Crear acceso directo
 powershell -ExecutionPolicy Bypass -File "%APP_DIR%\crear_acceso_directo.ps1" >nul 2>&1
-echo        Acceso directo creado en el escritorio OK
+echo        Icono en escritorio creado OK
 echo.
 
 :: ── RESUMEN ───────────────────────────────────────────────────────────────
 echo  ============================================================
 if %ERRORES% GTR 0 (
-    echo   INSTALACION COMPLETADA CON %ERRORES% ADVERTENCIA(S)
-    echo   Ver mensajes arriba para resolver manualmente
+    echo   COMPLETADO CON %ERRORES% ADVERTENCIA(S) - Ver mensajes arriba
 ) else (
     echo   INSTALACION COMPLETADA EXITOSAMENTE
 )
 echo  ============================================================
 echo.
-echo  IMPORTANTE: Editar LOCAL_ID en el archivo kiosco.bat
-echo  con el UUID del local correspondiente a esta maquina.
+echo  IMPORTANTE: Editar LOCAL_ID en kiosco.bat con el UUID del local.
+echo  Ver lista de UUIDs en LEER_PRIMERO.txt
 echo.
-echo  Luego REINICIAR la PC y usar el icono del escritorio.
+echo  REINICIAR la PC y usar el icono del escritorio.
 echo.
 pause
 endlocal
