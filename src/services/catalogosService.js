@@ -2,10 +2,12 @@ import { supabase, handleSupabaseError, getCurrentUser } from './supabase'
 import { format } from 'date-fns'
 
 // Helper para obtener fecha del turno activo
+// El turno nocturno inicia a las 05:00 AM, por lo que entre las 00:00 y las 04:59
+// cualquier operación pertenece al día anterior (turno aún abierto)
 const getFechaTurnoActivo = () => {
   const ahora = new Date()
   const horaActual = ahora.getHours()
-  if (horaActual < 7) {
+  if (horaActual < 5) {
     const ayer = new Date(ahora)
     ayer.setDate(ayer.getDate() - 1)
     return format(ayer, 'yyyy-MM-dd')
