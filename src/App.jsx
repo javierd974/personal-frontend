@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { supabase } from './services/supabase'
 import Login from './pages/Login'
+import ResetPassword from './pages/ResetPassword'
 import Dashboard from './pages/Dashboard'
 import Administracion from './pages/Administracion'
 import Kiosco from './pages/Kiosco'
@@ -38,6 +39,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/kiosco" element={<Kiosco />} />
         <Route
           path="/dashboard"
