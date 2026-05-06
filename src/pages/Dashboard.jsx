@@ -26,6 +26,7 @@ import Modal from '../components/common/Modal'
 import RegistroHorarios from '../components/registros/RegistroHorarios'
 import CierreDia from '../components/reportes/CierreDia'
 import ReporteEstado from '../components/reportes/ReporteEstado'
+import { APP_VERSION } from '../version'
 
 const Dashboard = () => {
   const navigate = useNavigate()
@@ -245,10 +246,10 @@ const Dashboard = () => {
         <header className="flex items-center justify-between px-6 py-4">
           <div>
             <h1 className="text-white text-xl font-bold">PERSONAL LOS NOTABLES</h1>
-            <p className="text-white/70 text-xs">Sistema de Gestión</p>
+            <p className="text-white/70 text-xs">Sistema de Gestión · v{APP_VERSION}</p>
           </div>
           <div className="flex items-center gap-3">
-            {usuario?.rol === 'administrador' && (
+            {usuario?.rol === 'admin' && (
               <button
                 onClick={() => navigate('/admin')}
                 className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
@@ -377,12 +378,13 @@ const Dashboard = () => {
                   {usuario?.nombre} {usuario?.apellido}
                 </p>
                 <p className="text-xs text-gray-600">{usuario?.email}</p>
-                {usuario?.rol === 'administrador' && (
+                {usuario?.rol === 'admin' && (
                   <span className="text-xs text-primary font-semibold">Administrador</span>
                 )}
+                <p className="text-[10px] text-gray-400 mt-0.5">v{APP_VERSION}</p>
               </div>
 
-              {usuario?.rol === 'administrador' && (
+              {usuario?.rol === 'admin' && (
                 <button
                   onClick={() => navigate('/admin')}
                   className="p-2 text-gray-600 hover:text-primary hover:bg-gray-100 rounded-lg transition-colors"

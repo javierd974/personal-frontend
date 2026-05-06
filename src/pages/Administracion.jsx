@@ -189,7 +189,7 @@ const Administracion = () => {
     const { authService } = await import('../services/authService')
     const userResult = await authService.getCurrentUser()
     
-    if (!userResult.success || userResult.data.rol !== 'administrador') {
+    if (!userResult.success || userResult.data.rol !== 'admin') {
       setAlert({ 
         type: 'error', 
         message: 'No tienes permisos para acceder a esta página' 

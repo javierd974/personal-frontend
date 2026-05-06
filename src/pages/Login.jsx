@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { LogIn, Mail, Lock, AlertCircle } from 'lucide-react'
 import { authService } from '../services/authService'
 import LoadingSpinner from '../components/common/LoadingSpinner'
+import { APP_VERSION } from '../version'
 
 const Login = () => {
   const navigate = useNavigate()
@@ -126,6 +127,7 @@ const Login = () => {
           <p className="text-sm text-gray-600">
             Desarrollado por <span className="font-semibold text-primary">SmartDom</span>
           </p>
+          <p className="text-xs text-gray-400 mt-1">v{APP_VERSION}</p>
         </div>
       </div>
     </div>

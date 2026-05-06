@@ -236,7 +236,7 @@ const GestionUsuarios = ({ onAlert }) => {
 
   const getRolBadgeColor = (rol) => {
     switch (rol) {
-      case 'administrador':
+      case 'admin':
         return 'bg-red-100 text-red-800'
       case 'rrhh':
         return 'bg-purple-100 text-purple-800'
@@ -249,7 +249,7 @@ const GestionUsuarios = ({ onAlert }) => {
 
   const getRolLabel = (rol) => {
     switch (rol) {
-      case 'administrador':
+      case 'admin':
         return 'Administrador'
       case 'rrhh':
         return 'RRHH'
@@ -457,7 +457,7 @@ const GestionUsuarios = ({ onAlert }) => {
               >
                 <option value="encargado">Encargado</option>
                 <option value="rrhh">RRHH</option>
-                <option value="administrador">Administrador</option>
+                <option value="admin">Administrador</option>
               </select>
             </div>
           </div>
@@ -528,7 +528,7 @@ const GestionUsuarios = ({ onAlert }) => {
             >
               <option value="encargado">Encargado</option>
               <option value="rrhh">RRHH</option>
-              <option value="administrador">Administrador</option>
+              <option value="admin">Administrador</option>
             </select>
           </div>
 
