@@ -23,6 +23,7 @@ import { valesService, ausenciasService, observacionesTurnoService } from '../se
 import LoadingSpinner from '../components/common/LoadingSpinner'
 import Alert from '../components/common/Alert'
 import Modal from '../components/common/Modal'
+import ComunicadosManager from '../components/common/ComunicadosManager'
 import RegistroHorarios from '../components/registros/RegistroHorarios'
 import CierreDia from '../components/reportes/CierreDia'
 import ReporteEstado from '../components/reportes/ReporteEstado'
@@ -799,6 +800,11 @@ const Dashboard = () => {
             observacionesIniciales={observacionesGenerales}
           />
         </Modal>
+      )}
+
+      {/* Comunicados RRHH -> Local (pop-up + acuse de recibo, realtime) */}
+      {localActual && usuario && (
+        <ComunicadosManager localId={localActual.id} usuario={usuario} />
       )}
 
       <footer className="smartdom-footer">

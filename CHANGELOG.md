@@ -8,6 +8,33 @@ El estándar de versionado compartido entre las aplicaciones SmartDom para Los N
 
 ---
 
+## \[1.6.0\] — 2026-06-05
+
+### Agregado
+
+- **Recepción de comunicados de RRHH (pop-up + acuse de recibo).** Cuando RRHH envía un comunicado al local (desde la app `gestion-rrhh-smartdom`), aparece un pop-up centrado en el dashboard del encargado logueado. Se muestra **una sola vez**: al cerrarlo (botón "Entendido" o la X) se registra el acuse de recibo (estado `visto`, hora de cierre y usuario que lo vio).
+- **Entrega instantánea vía Supabase Realtime.** Los comunicados aparecen al instante en los dashboards abiertos, sin necesidad de refrescar. Al seleccionar un local también se cargan los comunicados pendientes de ese local.
+- **Cola de comunicados:** si hay varios pendientes, se muestran de a uno en secuencia.
+
+### Servicios nuevos
+
+- `comunicadosService.getPendientes(localId)` — comunicados no vistos del local.
+- `comunicadosService.marcarVisto(id, { usuarioId, usuarioNombre })` — registra el acuse de recibo.
+
+### Archivos
+
+- `src/services/comunicadosService.js` — recepción y acuse de recibo.
+- `src/components/common/ComunicadosManager.jsx` — manejador de cola + suscripción Realtime + pop-up.
+- `src/pages/Dashboard.jsx` — monta el manejador cuando hay local y usuario.
+
+### Base de datos
+
+- Consume la tabla `comunicados_locales` creada por la migración `RRHH_011_comunicados_locales.sql` (proyecto `ddpjzfltfmfoenkxynpu`). No requiere migración propia.
+
+> **Nota de ecosistema:** contraparte de la release **1.11.0** de `gestion-rrhh-smartdom`.
+
+---
+
 ## \[1.5.0\] — 2026-05-06
 
 ### Agregado
