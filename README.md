@@ -204,40 +204,37 @@ Esto generará los archivos optimizados en la carpeta `dist/`
 npm run preview
 ```
 
-## 🚢 Despliegue en EasyPanel (VPS)
+## 🚢 Despliegue en VPS (Docker Swarm)
 
-### 1. Preparar el Proyecto
+El despliegue se realiza en la VPS mediante el script `deploy_personal.sh`
+(ubicado en `/usr/local/bin/deploy_personal.sh`), que automatiza todo el flujo.
 
-1. Asegúrate de que el build funciona correctamente
-2. Sube el código a un repositorio Git (GitHub, GitLab, etc.)
+### 1. Subir los cambios
 
-### 2. Configurar en EasyPanel
-
-1. Accede a tu panel de EasyPanel
-2. Crea una nueva aplicación
-3. Selecciona "Static Site" o "Node.js"
-4. Conecta tu repositorio Git
-
-### 3. Configuración de Build
-
-```yaml
-Build Command: npm run build
-Output Directory: dist
-Install Command: npm install
+```bash
+git add .
+git commit -m "..."
+git push origin main
 ```
 
-### 4. Variables de Entorno
+### 2. Ejecutar el deploy en la VPS
 
-En EasyPanel, agrega las variables de entorno:
+Conectarse por SSH y correr el script:
 
+```bash
+ssh -i ~/.ssh/id_ed25519_personal root@46.202.147.30
+bash /usr/local/bin/deploy_personal.sh
 ```
-VITE_SUPABASE_URL=tu_supabase_url
-VITE_SUPABASE_ANON_KEY=tu_supabase_anon_key
-```
 
-### 5. Dominio
+### 3. Qué hace el script
 
-Configura tu dominio `smartdom.io` apuntando a tu aplicación en EasyPanel.
+1. Entra al repo en `/opt/personal/app`
+2. Trae la última versión: `git fetch origin` + `git reset --hard origin/main`
+3. Reconstruye la imagen Docker: `docker build --no-cache -t personal:prod .`
+   (inyecta `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` como build args)
+4. Reinicia el servicio: `docker service update --force personal_front`
+
+> Nota: el build se hace sin caché, por lo que puede tardar varios minutos.
 
 ## 📱 Funcionalidades Futuras
 
