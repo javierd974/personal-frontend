@@ -100,10 +100,14 @@ const ReporteEstado = ({ localId, localNombre, onAlert, observacionesInicial = '
             body {
               font-family: 'Courier New', monospace;
               font-size: 10pt;
+              font-weight: 700;
+              color: #000;
               line-height: 1.2;
               white-space: pre-wrap;
               word-wrap: break-word;
               max-width: 72mm;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
             }
           </style>
         </head>

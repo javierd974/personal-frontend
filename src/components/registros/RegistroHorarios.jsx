@@ -258,6 +258,8 @@ const RegistroHorarios = ({ localId, onUpdate, onAlert, observaciones, onObserva
       font-size: 9pt;
       font-weight: 700;
       line-height: 1.35;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
     .encabezado {
       text-align: center;
@@ -273,13 +275,14 @@ const RegistroHorarios = ({ localId, onUpdate, onAlert, observaciones, onObserva
     }
     .subtitulo {
       font-size: 8pt;
+      font-weight: 700;
       letter-spacing: 0.08em;
-      color: #333;
+      color: #000;
       margin-top: 1mm;
     }
     .local-nombre {
       font-size: 9pt;
-      font-weight: 600;
+      font-weight: 700;
       letter-spacing: 0.05em;
       margin-top: 1.5mm;
     }
@@ -301,9 +304,10 @@ const RegistroHorarios = ({ localId, onUpdate, onAlert, observaciones, onObserva
     }
     .campo-label {
       font-size: 7.5pt;
+      font-weight: 700;
       letter-spacing: 0.1em;
       text-transform: uppercase;
-      color: #666;
+      color: #000;
       margin-bottom: 0.5mm;
     }
     .campo-valor {
@@ -346,8 +350,8 @@ const RegistroHorarios = ({ localId, onUpdate, onAlert, observaciones, onObserva
     }
     .obs-valor {
       font-size: 8.5pt;
-      font-weight: 600;
-      color: #222;
+      font-weight: 700;
+      color: #000;
       word-break: break-word;
       line-height: 1.4;
     }
@@ -362,17 +366,19 @@ const RegistroHorarios = ({ localId, onUpdate, onAlert, observaciones, onObserva
     }
     .firma-label {
       font-size: 7.5pt;
+      font-weight: 700;
       letter-spacing: 0.1em;
       text-transform: uppercase;
-      color: #555;
+      color: #000;
     }
     .pie {
       text-align: center;
       margin-top: 4mm;
       padding-top: 2.5mm;
-      border-top: 1px dashed #ccc;
+      border-top: 1px dashed #999;
       font-size: 7pt;
-      color: #aaa;
+      font-weight: 700;
+      color: #333;
       letter-spacing: 0.08em;
     }
   </style>
