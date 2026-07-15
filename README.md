@@ -204,7 +204,14 @@ Esto generará los archivos optimizados en la carpeta `dist/`
 npm run preview
 ```
 
-## 🚢 Despliegue en VPS (Docker Swarm)
+## 🚢 Despliegue en VPS
+
+> ⚠️ **La fuente de verdad del deploy es [`DEPLOY.md`](./DEPLOY.md).**
+> Es Docker **plano** (no Swarm). Repo en `/opt/personal/app`, contenedor `personal_front`
+> en el puerto `3102`, script `/opt/personal/deploy_personal.sh`.
+> El bloque de abajo quedó **histórico/desactualizado** — no seguir.
+
+## 🚢 Despliegue en VPS (histórico — NO usar)
 
 El despliegue se realiza en la VPS mediante el script `deploy_personal.sh`
 (ubicado en `/usr/local/bin/deploy_personal.sh`), que automatiza todo el flujo.
