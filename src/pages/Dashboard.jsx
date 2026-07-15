@@ -14,7 +14,8 @@ import {
   X,
   ClipboardList,
   MapPin,
-  History
+  History,
+  Fingerprint
 } from 'lucide-react'
 import { authService } from '../services/authService'
 import { localesService } from '../services/catalogosService'
@@ -27,6 +28,7 @@ import ComunicadosManager from '../components/common/ComunicadosManager'
 import RegistroHorarios from '../components/registros/RegistroHorarios'
 import CierreDia from '../components/reportes/CierreDia'
 import ReporteEstado from '../components/reportes/ReporteEstado'
+import AltaEmpleadoModal from '../components/registros/AltaEmpleadoModal'
 import { APP_VERSION } from '../version'
 
 const Dashboard = () => {
@@ -52,6 +54,7 @@ const Dashboard = () => {
   const [modalAusencias, setModalAusencias] = useState(false)
   const [modalCierreDia, setModalCierreDia] = useState(false)
   const [modalReporteEstado, setModalReporteEstado] = useState(false)
+  const [modalAlta, setModalAlta] = useState(false)
   const [detalleVales, setDetalleVales] = useState([])
   const [detalleAusencias, setDetalleAusencias] = useState([])
   const [historialVales, setHistorialVales] = useState([])
@@ -231,6 +234,9 @@ const Dashboard = () => {
     setLocalActual(local)
   }
 
+  const puedeEnrolar = ['encargado', 'admin', 'rrhh'].includes(usuario?.tipo_usuario) ||
+                       ['encargado', 'admin', 'rrhh'].includes(usuario?.rol)
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -250,6 +256,24 @@ const Dashboard = () => {
             <p className="text-white/70 text-xs">Sistema de Gestión · v{APP_VERSION}</p>
           </div>
           <div className="flex items-center gap-3">
+            {puedeEnrolar && (
+              <button
+                onClick={() => setModalAlta(true)}
+                className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                title="Alta de empleado autorizado"
+              >
+                <UserPlus className="w-5 h-5" />
+              </button>
+            )}
+            {puedeEnrolar && (
+              <button
+                onClick={() => navigate('/enrolar')}
+                className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                title="Enrolar huellas"
+              >
+                <Fingerprint className="w-5 h-5" />
+              </button>
+            )}
             {usuario?.rol === 'admin' && (
               <button
                 onClick={() => navigate('/admin')}
@@ -313,6 +337,13 @@ const Dashboard = () => {
             </div>
           </div>
         </div>
+
+        <AltaEmpleadoModal
+          isOpen={modalAlta}
+          onClose={() => setModalAlta(false)}
+          localId={localActual?.id}
+          onAlert={setAlert}
+        />
 
         <footer className="text-center text-white/50 text-xs py-4">
           Desarrollado por SmartDom
@@ -385,6 +416,24 @@ const Dashboard = () => {
                 <p className="text-[10px] text-gray-400 mt-0.5">v{APP_VERSION}</p>
               </div>
 
+              {puedeEnrolar && (
+                <button
+                  onClick={() => setModalAlta(true)}
+                  className="p-2 text-gray-600 hover:text-primary hover:bg-gray-100 rounded-lg transition-colors"
+                  title="Alta de empleado autorizado"
+                >
+                  <UserPlus className="w-5 h-5" />
+                </button>
+              )}
+              {puedeEnrolar && (
+                <button
+                  onClick={() => navigate('/enrolar')}
+                  className="p-2 text-gray-600 hover:text-primary hover:bg-gray-100 rounded-lg transition-colors"
+                  title="Enrolar huellas"
+                >
+                  <Fingerprint className="w-5 h-5" />
+                </button>
+              )}
               {usuario?.rol === 'admin' && (
                 <button
                   onClick={() => navigate('/admin')}
@@ -801,6 +850,15 @@ const Dashboard = () => {
           />
         </Modal>
       )}
+
+      {/* Alta de empleado autorizado (DNI pre-aprobado por administración) */}
+      <AltaEmpleadoModal
+        isOpen={modalAlta}
+        onClose={() => setModalAlta(false)}
+        localId={localActual?.id}
+        onAlert={setAlert}
+        onSuccess={cargarResumenLocal}
+      />
 
       {/* Comunicados RRHH -> Local (pop-up + acuse de recibo, realtime) */}
       {localActual && usuario && (
