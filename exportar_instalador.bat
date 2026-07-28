@@ -18,6 +18,8 @@ echo  Copiando drivers SecuGen...
 copy /Y "%SRC%\drivers\WinDrivers_v3001_Installer.zip" "%DEST%\drivers\" >nul
 copy /Y "%SRC%\drivers\SGI_BWAPI_WIN_32bit.exe" "%DEST%\drivers\" >nul
 copy /Y "%SRC%\drivers\SGI_BWAPI_WIN_64bit.exe" "%DEST%\drivers\" >nul
+copy /Y "%SRC%\drivers\vc_redist.x86.exe" "%DEST%\drivers\" >nul
+copy /Y "%SRC%\drivers\vc_redist.x64.exe" "%DEST%\drivers\" >nul
 
 :: Copiar scripts del instalador
 echo  Copiando scripts...

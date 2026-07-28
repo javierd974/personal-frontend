@@ -33,14 +33,29 @@ echo  Arquitectura detectada: %ARCH%
 if "%ARCH%"=="x64" (
     set BWAPI_FILE=SGI_BWAPI_WIN_64bit.exe
     set DRIVER_MSI=sgdrvsetupu20x64.msi
+    set VCREDIST=vc_redist.x64.exe
 ) else (
     set BWAPI_FILE=SGI_BWAPI_WIN_32bit.exe
     set DRIVER_MSI=sgdrvsetupu20x86.msi
+    set VCREDIST=vc_redist.x86.exe
+)
+echo.
+
+:: -- PASO 0: Visual C++ Runtime (UCRT) ---------------------------------------
+:: Necesario para que sgibiosrv arranque. Windows 7 y equipos sin actualizar
+:: NO traen api-ms-win-crt-*.dll; sin esto el WebAPI no inicia.
+echo  [1/6] Instalando Visual C++ Runtime (%VCREDIST%)...
+if exist "%DRIVERS_DIR%\%VCREDIST%" (
+    "%DRIVERS_DIR%\%VCREDIST%" /install /quiet /norestart
+    echo        Runtime instalado ^(o ya presente^).
+) else (
+    echo        [ADVERTENCIA] Falta drivers\%VCREDIST% - si sgibiosrv no arranca,
+    echo        instalar el Visual C++ Redistributable manualmente.
 )
 echo.
 
 :: -- PASO 1: Driver SecuGen ---------------------------------------------------
-echo  [1/5] Instalando driver SecuGen (%DRIVER_MSI%)...
+echo  [2/6] Instalando driver SecuGen (%DRIVER_MSI%)...
 if exist "%DRIVERS_DIR%\WinDrivers_v3001_Installer.zip" (
     set DRIVER_TEMP=%TEMP%\SecuGenDriver
     if exist "!DRIVER_TEMP!" rmdir /s /q "!DRIVER_TEMP!"
@@ -62,7 +77,7 @@ if exist "%DRIVERS_DIR%\WinDrivers_v3001_Installer.zip" (
 echo.
 
 :: -- PASO 2: WebAPI SecuGen ---------------------------------------------------
-echo  [2/5] Instalando SecuGen WebAPI (%BWAPI_FILE%)...
+echo  [3/6] Instalando SecuGen WebAPI (%BWAPI_FILE%)...
 echo        NOTA: puede abrirse una ventana del asistente. Segui los pasos y,
 echo        si aparece un error de "close applications", elegi
 echo        "Ignore the error and continue".
@@ -83,7 +98,7 @@ if exist "%DRIVERS_DIR%\%BWAPI_FILE%" (
 echo.
 
 :: -- PASO 3: Certificado ------------------------------------------------------
-echo  [3/5] Instalando certificado SecuGen...
+echo  [4/6] Instalando certificado SecuGen...
 set CERT_PATH=
 if exist "C:\Program Files\SecuGen\SgiBioSrv\sgca.crt" set CERT_PATH=C:\Program Files\SecuGen\SgiBioSrv\sgca.crt
 if exist "C:\Program Files (x86)\SecuGen\SgiBioSrv\sgca.crt" set CERT_PATH=C:\Program Files (x86)\SecuGen\SgiBioSrv\sgca.crt
@@ -97,7 +112,7 @@ if defined CERT_PATH (
 echo.
 
 :: -- PASO 4: Copiar lanzador y elegir local ----------------------------------
-echo  [4/5] Configurando el kiosco...
+echo  [5/6] Configurando el kiosco...
 if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
 copy /Y "%SCRIPT_DIR%kiosco.bat" "%INSTALL_DIR%\kiosco.bat" >nul
 
@@ -136,7 +151,7 @@ if not defined SELUUID (
 echo.
 
 :: -- PASO 5: Acceso directo + chequeo de Chrome ------------------------------
-echo  [5/5] Creando acceso directo en el escritorio...
+echo  [6/6] Creando acceso directo en el escritorio...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%crear_acceso_directo.ps1" >nul 2>&1
 echo        Icono "SmartDom Kiosco" creado.
 
