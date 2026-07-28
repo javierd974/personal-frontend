@@ -1,37 +1,25 @@
 @echo off
-title SmartDom Kiosco - Oficina
-set LOCAL_ID=c18343eb-acf8-4aa1-abe7-c4674c25f8a8
+title SmartDom Kiosco
+:: ===========================================================================
+:: Lanzador del kiosco biometrico (modelo por URL de produccion).
+:: - PROD_URL viene precargada (produccion).
+:: - LOCAL_ID lo setea el instalador; si quedo vacio, editar la linea de abajo
+::   pegando el UUID del local correspondiente (ver LEER_PRIMERO.txt).
+:: ===========================================================================
+set LOCAL_ID=__LOCAL_ID__
+set PROD_URL=https://personal.losnotables.cloud
 
-:: ── 1. Iniciar sgibiosrv ──────────────────────────────────────────────────
-tasklist /FI "IMAGENAME eq sgibiosrv.exe" 2>NUL | find /I /N "sgibiosrv.exe">NUL
-if "%ERRORLEVEL%"=="1" (
-    start "" "C:\Program Files\SecuGen\SgiBioSrv\sgibiosrv.exe"
-    timeout /t 3 /nobreak >NUL
+set URL=%PROD_URL%/kiosco?local=%LOCAL_ID%
+
+:: -- 1. Asegurar que el WebAPI SecuGen (sgibiosrv) este corriendo ------------
+tasklist /FI "IMAGENAME eq sgibiosrv.exe" 2>NUL | find /I "sgibiosrv.exe" >NUL
+if errorlevel 1 (
+    if exist "C:\Program Files\SecuGen\SgiBioSrv\sgibiosrv.exe" start "" "C:\Program Files\SecuGen\SgiBioSrv\sgibiosrv.exe"
+    if exist "C:\Program Files (x86)\SecuGen\SgiBioSrv\sgibiosrv.exe" start "" "C:\Program Files (x86)\SecuGen\SgiBioSrv\sgibiosrv.exe"
+    timeout /t 2 /nobreak >NUL
 )
 
-:: ── 2. Iniciar Vite si no está corriendo ──────────────────────────────────
-netstat -ano | findstr ":5173" >NUL
-if "%ERRORLEVEL%"=="1" (
-    start "SmartDom Dev" /min cmd /c "cd /d C:\Proyectos\gestion-personal-smartdom && npm run dev"
-)
-
-:: ── 3. Esperar hasta que Vite responda (max 90 seg) ───────────────────────
-set /a N=0
-:LOOP
-set /a N+=1
-if %N% GTR 30 goto OPEN
-timeout /t 3 /nobreak >NUL
-netstat -ano | findstr ":5173" >NUL
-if "%ERRORLEVEL%"=="1" goto LOOP
-
-:: Esperar 2 segundos extra para que Vite termine de compilar
-timeout /t 2 /nobreak >NUL
-
-:: ── 4. Abrir en Chrome ────────────────────────────────────────────────────
-:OPEN
-set URL=http://localhost:5173/kiosco?local=%LOCAL_ID%
-
-:: Chrome en modo kiosko nativo (pantalla completa, sin decoraciones)
+:: -- 2. Abrir Chrome en modo kiosco -----------------------------------------
 set C1="%ProgramFiles%\Google\Chrome\Application\chrome.exe"
 set C2="%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"
 set C3="%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"
@@ -40,8 +28,12 @@ if exist %C1% ( start "" %C1% --kiosk "%URL%" & goto END )
 if exist %C2% ( start "" %C2% --kiosk "%URL%" & goto END )
 if exist %C3% ( start "" %C3% --kiosk "%URL%" & goto END )
 
-:: Fallback: navegador por defecto
-start %URL%
+:: -- 3. Fallback: Edge en modo kiosco ---------------------------------------
+where msedge >NUL 2>&1
+if not errorlevel 1 ( start "" msedge --kiosk "%URL%" --edge-kiosk-type=fullscreen & goto END )
+
+:: -- 4. Ultimo fallback: navegador por defecto ------------------------------
+start "" "%URL%"
 
 :END
 exit
