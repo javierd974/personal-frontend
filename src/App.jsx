@@ -6,6 +6,7 @@ import ResetPassword from './pages/ResetPassword'
 import Dashboard from './pages/Dashboard'
 import Administracion from './pages/Administracion'
 import Kiosco from './pages/Kiosco'
+import EnrolarHuellas from './pages/EnrolarHuellas'
 import LoadingSpinner from './components/common/LoadingSpinner'
 
 // Componente de ruta protegida
@@ -54,6 +55,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Administracion />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/enrolar"
+          element={
+            <ProtectedRoute>
+              <EnrolarHuellas />
             </ProtectedRoute>
           }
         />

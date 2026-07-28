@@ -40,7 +40,7 @@ const EnrollHuella = ({ empleado, onAlert, onClose }) => {
       return
     }
     setEstado('guardando'); setMensajeEstado('Guardando huella...')
-    const guardado = await biometricoService.guardarHuella(empleado.id, dedoSeleccionado, resultado.template)
+    const guardado = await biometricoService.enrolarHuella(empleado.id, dedoSeleccionado, resultado.template)
     if (guardado.success) {
       setEstado('ok'); setMensajeEstado('¡Huella registrada correctamente!')
       onAlert({ type: 'success', message: `Huella de ${DEDOS.find(d => d.id === dedoSeleccionado)?.label} registrada` })
@@ -87,7 +87,7 @@ const EnrollHuella = ({ empleado, onAlert, onClose }) => {
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <p className="text-red-800 font-medium text-sm">⚠️ Servicio biométrico no activo en esta PC.</p>
           <p className="text-red-600 text-xs mt-1">
-            Abrí <strong>https://localhost:8443/SGIFPCapture</strong> en el navegador y aceptá el certificado.
+            Verificá que el lector SecuGen esté conectado y que el servicio <strong>SgiBioSrv</strong> (https://localhost:8443) esté corriendo. Si recién arrancaste la PC, esperá unos segundos e intentá de nuevo.
           </p>
         </div>
       )}

@@ -1,6 +1,9 @@
-﻿// Llamada directa al WebAPI de SecuGen â€” certificado instalado en Windows via certutil
-// HTTP puerto 8000 — sin certificado, funciona en cualquier contexto de Chrome
-const WEBAPI_URL = 'http://127.0.0.1:8000'
+﻿// Llamada directa al WebAPI de SecuGen (servicio local SgiBioSrv, version "over HTTPS").
+// Responde en https://localhost:8443. Requiere el certificado sgca.crt instalado en la
+// raiz de confianza de Windows (lo hace el instalador). Se usa el hostname 'localhost'
+// —no 127.0.0.1— porque el certificado esta emitido para 'localhost'.
+// Al servirse la app por HTTPS en produccion, esto evita el bloqueo por "mixed content".
+const WEBAPI_URL = 'https://localhost:8443'
 
 export const biometricoService = {
 
@@ -79,6 +82,44 @@ export const biometricoService = {
         activo: true, updated_at: new Date().toISOString()
       }, { onConflict: 'empleado_id,dedo' })
       .select().single()
+    if (error) return { success: false, error: error.message }
+    return { success: true, data }
+  },
+
+  // Enrolamiento scopeado por local (RPC SECURITY DEFINER).
+  // Encargado: solo empleados de su local. admin/rrhh: cualquiera.
+  async enrolarHuella(empleadoId, dedo, template, calidad = null) {
+    const { supabase } = await import('./supabase')
+    const { data, error } = await supabase.rpc('enrolar_huella', {
+      p_empleado_id: empleadoId,
+      p_dedo: dedo,
+      p_template_iso: template,
+      p_calidad: calidad
+    })
+    if (error) return { success: false, error: error.message }
+    return { success: true, data }
+  },
+
+  // Identificación del kiosco: SOLO templates activos del local indicado.
+  async getHuellasParaIdentificacion(localId) {
+    const { createClient } = await import('@supabase/supabase-js')
+    const supabaseAnon = createClient(
+      import.meta.env.VITE_SUPABASE_URL,
+      import.meta.env.VITE_SUPABASE_ANON_KEY
+    )
+    const { data, error } = await supabaseAnon.rpc('huellas_para_identificacion', {
+      p_local_id: localId
+    })
+    if (error) return { success: false, error: error.message }
+    return { success: true, data }
+  },
+
+  // Estado de enrolamiento por local (RPC): devuelve [{empleado_id, dedo}] sin templates.
+  async getEstadoHuellasLocal(localId) {
+    const { supabase } = await import('./supabase')
+    const { data, error } = await supabase.rpc('huellas_estado_local', {
+      p_local_id: localId
+    })
     if (error) return { success: false, error: error.message }
     return { success: true, data }
   },

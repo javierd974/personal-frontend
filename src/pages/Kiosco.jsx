@@ -100,10 +100,10 @@ export default function Kiosco() {
     }
 
     setEstado(ESTADOS.IDENTIFICANDO)
-    const huellasResult = await biometricoService.getHuellasActivas()
+    const huellasResult = await biometricoService.getHuellasParaIdentificacion(localId)
     if (!huellasResult.success || huellasResult.data.length === 0) {
       setEstado(ESTADOS.ERROR)
-      setMensaje('No hay huellas registradas. Consultá al encargado.')
+      setMensaje('No hay huellas registradas en este local. Consultá al encargado.')
       resetear(4000)
       return
     }

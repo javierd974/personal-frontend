@@ -20,6 +20,26 @@ export const empleadosService = {
     }
   },
 
+  // Obtener empleados activos de uno o varios locales (por local_origen_id)
+  async getEmpleadosDeLocales(localIds) {
+    try {
+      const ids = Array.isArray(localIds) ? localIds : [localIds]
+      const { data, error } = await supabase
+        .from('empleados')
+        .select('*')
+        .eq('activo', true)
+        .in('local_origen_id', ids)
+        .order('apellido', { ascending: true })
+        .order('nombre', { ascending: true })
+
+      if (error) throw error
+
+      return { success: true, data }
+    } catch (error) {
+      return { success: false, error: handleSupabaseError(error) }
+    }
+  },
+
   // Obtener un empleado por ID
   async getEmpleadoById(empleadoId) {
     try {
