@@ -27,6 +27,10 @@ const ERROR_HOLD_MS   = 3500   // cuánto se muestra un error / huella no recono
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 
+// Valida que el local sea un UUID real (evita fichar con un LOCAL_ID sin
+// configurar, ej. el placeholder "__LOCAL_ID__", que rompe el registro).
+const esUUID = (s) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s || '')
+
 // Candado a nivel de módulo: garantiza que UNA sola lectura se procese a la vez
 // de punta a punta (identificar + decidir + registrar + cooldown), aunque haya
 // más de un loop de captura corriendo (StrictMode en dev, o varias pestañas).
@@ -59,11 +63,13 @@ export default function Kiosco() {
     const params = new URLSearchParams(window.location.search)
     const lidUrl = params.get('local')
     const lid = lidUrl || lidGuardado
-    if (lid) {
+    if (lid && esUUID(lid)) {
       setLocalId(lid)
       setLocalNombre(nombreGuardado || '')
       localStorage.setItem(STORAGE_KEY, lid)
     }
+    // Si el local no es un UUID valido (ej. placeholder sin configurar), no
+    // seteamos localId -> se muestra el selector para elegir el local.
   }, [])
 
   // Loop de lectura automática: arranca cuando hay local seleccionado
@@ -140,10 +146,10 @@ export default function Kiosco() {
     const lid = localIdRef.current
     setEstado(ESTADOS.IDENTIFICANDO)
 
-    // 1. Traer huellas del local e identificar
-    const huellasResult = await biometricoService.getHuellasParaIdentificacion(lid)
+    // 1. Traer TODAS las huellas activas (cualquier local) e identificar
+    const huellasResult = await biometricoService.getHuellasParaTodas()
     if (!huellasResult.success || huellasResult.data.length === 0) {
-      return finLectura(ESTADOS.ERROR, { mensaje: 'No hay huellas registradas en este local. Consultá al encargado.' }, ERROR_HOLD_MS, token)
+      return finLectura(ESTADOS.ERROR, { mensaje: 'No hay huellas registradas en el sistema. Consultá al encargado.' }, ERROR_HOLD_MS, token)
     }
     const match = await biometricoService.identificarEmpleado(template, huellasResult.data)
     if (!match.encontrado) {

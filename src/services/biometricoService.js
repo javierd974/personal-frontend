@@ -114,6 +114,19 @@ export const biometricoService = {
     return { success: true, data }
   },
 
+  // Identificación GLOBAL: todas las huellas activas (cualquier local), para
+  // que un empleado pueda fichar aunque esté registrado en otro local.
+  async getHuellasParaTodas() {
+    const { createClient } = await import('@supabase/supabase-js')
+    const supabaseAnon = createClient(
+      import.meta.env.VITE_SUPABASE_URL,
+      import.meta.env.VITE_SUPABASE_ANON_KEY
+    )
+    const { data, error } = await supabaseAnon.rpc('huellas_para_identificacion_todas')
+    if (error) return { success: false, error: error.message }
+    return { success: true, data }
+  },
+
   // Estado de enrolamiento por local (RPC): devuelve [{empleado_id, dedo}] sin templates.
   async getEstadoHuellasLocal(localId) {
     const { supabase } = await import('./supabase')

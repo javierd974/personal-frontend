@@ -29,9 +29,9 @@ const IdentificacionBiometrica = ({ localId, onRegistrado, onAlert }) => {
 
     // 2. Identificar contra las huellas del local
     setEstado('identificando')
-    const huellas = await biometricoService.getHuellasParaIdentificacion(localId)
+    const huellas = await biometricoService.getHuellasParaTodas()
     if (!huellas.success || huellas.data.length === 0) {
-      setEstado('error'); onAlert?.({ type: 'warning', message: 'No hay huellas registradas en este local.' }); volverAIdle(2500); return
+      setEstado('error'); onAlert?.({ type: 'warning', message: 'No hay huellas registradas en el sistema.' }); volverAIdle(2500); return
     }
     const match = await biometricoService.identificarEmpleado(cap.template, huellas.data)
     if (!match.encontrado) {
