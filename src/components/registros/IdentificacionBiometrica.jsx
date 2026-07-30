@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { Fingerprint, CheckCircle, XCircle, Loader2, LogOut } from 'lucide-react'
 import { biometricoService } from '../../services/biometricoService'
 import { empleadosService } from '../../services/empleadosService'
@@ -10,11 +10,14 @@ import { registrosService } from '../../services/registrosService'
 const IdentificacionBiometrica = ({ localId, onRegistrado, onAlert }) => {
   const [estado, setEstado]       = useState('idle') // idle|capturando|identificando|procesando|ok|error
   const [resultado, setResultado] = useState(null)   // { nombre, accion }
+  const enCursoRef = useRef(false)                    // evita doble-toque / reentrada
 
-  const volverAIdle = (ms = 3000) => setTimeout(() => setEstado('idle'), ms)
+  const volverAIdle = (ms = 3000) => setTimeout(() => { setEstado('idle'); enCursoRef.current = false }, ms)
 
   const marcarPorHuella = async () => {
+    if (enCursoRef.current) return                    // ya hay una marca en curso: ignorar
     if (!localId) { onAlert?.({ type: 'error', message: 'Seleccioná un local primero.' }); return }
+    enCursoRef.current = true
     setResultado(null)
     setEstado('capturando')
 
@@ -84,7 +87,7 @@ const IdentificacionBiometrica = ({ localId, onRegistrado, onAlert }) => {
     <div className="space-y-2">
       <button
         onClick={marcarPorHuella}
-        disabled={trabajando}
+        disabled={estado !== 'idle'}
         className={`w-full py-5 rounded-xl font-bold text-lg transition-all flex items-center justify-center gap-3 shadow-lg text-white ${
           estado === 'ok' ? (esSalida ? 'bg-amber-600' : 'bg-green-600')
           : estado === 'error' ? 'bg-red-500'
