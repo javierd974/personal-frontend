@@ -167,9 +167,14 @@ if "%CHROME_OK%"=="0" (
 )
 
 :: Politica de Chrome: autorizar a la app (publica) a hablar con el lector en
-:: localhost. Sin esto, Chrome bloquea el fetch por Private Network Access (CORS).
+:: localhost. Sin esto, Chrome bloquea el fetch (Private/Local Network Access).
+:: Se setean los 3 nombres segun version de Chrome (los que no apliquen se ignoran):
+::  - InsecurePrivateNetworkRequestsAllowedForUrls (Chrome viejos, PNA)
+::  - LoopbackNetworkAllowedForUrls / LocalNetworkAccessAllowedForUrls (Chrome nuevos, LNA)
 reg add "HKLM\SOFTWARE\Policies\Google\Chrome\InsecurePrivateNetworkRequestsAllowedForUrls" /v 1 /t REG_SZ /d "https://personal.losnotables.cloud" /f >nul 2>&1
-echo        Politica de Chrome aplicada (acceso al lector en localhost).
+reg add "HKLM\SOFTWARE\Policies\Google\Chrome\LoopbackNetworkAllowedForUrls" /v 1 /t REG_SZ /d "https://personal.losnotables.cloud" /f >nul 2>&1
+reg add "HKLM\SOFTWARE\Policies\Google\Chrome\LocalNetworkAccessAllowedForUrls" /v 1 /t REG_SZ /d "https://personal.losnotables.cloud" /f >nul 2>&1
+echo        Politicas de Chrome aplicadas (acceso al lector en localhost).
 echo.
 
 :: -- PASO FINAL: Diagnostico del lector + reporte al tablero -----------------
