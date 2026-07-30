@@ -26,6 +26,8 @@ echo  Copiando scripts...
 copy /Y "%SRC%\instalar.bat" "%DEST%\" >nul
 copy /Y "%SRC%\kiosco.bat" "%DEST%\" >nul
 copy /Y "%SRC%\crear_acceso_directo.ps1" "%DEST%\" >nul
+copy /Y "%SRC%\diagnostico.ps1" "%DEST%\" >nul
+copy /Y "%SRC%\diagnostico.bat" "%DEST%\" >nul
 
 :: Crear guia
 echo  Creando guia...

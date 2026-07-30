@@ -64,6 +64,8 @@ if exist "%DRIVERS_DIR%\WinDrivers_v3001_Installer.zip" (
     for /r "!DRIVER_TEMP!" %%f in (%DRIVER_MSI%) do set MSIPATH=%%f
     if defined MSIPATH (
         msiexec /i "!MSIPATH!" /qn /norestart
+        :: Forzar binding del driver (Win10/11 reasigna el device a SecuGen; en Win7 se ignora)
+        pnputil /add-driver "!DRIVER_TEMP!\*.inf" /subdirs /install >nul 2>&1
         echo        Driver instalado.
     ) else (
         echo        [ERROR] No se encontro %DRIVER_MSI% dentro del zip.
@@ -163,6 +165,11 @@ if "%CHROME_OK%"=="0" (
     echo        [ADVERTENCIA] No se encontro Google Chrome. Instalalo para el modo kiosco
     echo        ^(en Windows 7 usar la ultima version compatible, Chrome 109^).
 )
+echo.
+
+:: -- PASO FINAL: Diagnostico del lector + reporte al tablero -----------------
+echo  Ejecutando diagnostico del lector y reportando estado...
+powershell -ExecutionPolicy Bypass -File "%SCRIPT_DIR%diagnostico.ps1" -LocalNombre "!SELNOMBRE!"
 echo.
 
 :: -- RESUMEN -----------------------------------------------------------------

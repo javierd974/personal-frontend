@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard'
 import Administracion from './pages/Administracion'
 import Kiosco from './pages/Kiosco'
 import EnrolarHuellas from './pages/EnrolarHuellas'
+import InstalacionesKiosco from './pages/InstalacionesKiosco'
 import LoadingSpinner from './components/common/LoadingSpinner'
 
 // Componente de ruta protegida
@@ -63,6 +64,14 @@ function App() {
           element={
             <ProtectedRoute>
               <EnrolarHuellas />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/instalaciones"
+          element={
+            <ProtectedRoute>
+              <InstalacionesKiosco />
             </ProtectedRoute>
           }
         />

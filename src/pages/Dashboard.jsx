@@ -15,7 +15,8 @@ import {
   ClipboardList,
   MapPin,
   History,
-  Fingerprint
+  Fingerprint,
+  Monitor
 } from 'lucide-react'
 import { authService } from '../services/authService'
 import { localesService } from '../services/catalogosService'
@@ -236,6 +237,8 @@ const Dashboard = () => {
 
   const puedeEnrolar = ['encargado', 'admin', 'rrhh'].includes(usuario?.tipo_usuario) ||
                        ['encargado', 'admin', 'rrhh'].includes(usuario?.rol)
+  const puedeVerInstalaciones = ['admin', 'rrhh'].includes(usuario?.tipo_usuario) ||
+                                ['admin', 'rrhh'].includes(usuario?.rol)
 
   if (loading) {
     return (
@@ -272,6 +275,15 @@ const Dashboard = () => {
                 title="Enrolar huellas"
               >
                 <Fingerprint className="w-5 h-5" />
+              </button>
+            )}
+            {puedeVerInstalaciones && (
+              <button
+                onClick={() => navigate('/instalaciones')}
+                className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                title="Instalación de kioscos"
+              >
+                <Monitor className="w-5 h-5" />
               </button>
             )}
             {usuario?.rol === 'admin' && (
@@ -432,6 +444,15 @@ const Dashboard = () => {
                   title="Enrolar huellas"
                 >
                   <Fingerprint className="w-5 h-5" />
+                </button>
+              )}
+              {puedeVerInstalaciones && (
+                <button
+                  onClick={() => navigate('/instalaciones')}
+                  className="p-2 text-gray-600 hover:text-primary hover:bg-gray-100 rounded-lg transition-colors"
+                  title="Instalación de kioscos"
+                >
+                  <Monitor className="w-5 h-5" />
                 </button>
               )}
               {usuario?.rol === 'admin' && (
