@@ -546,10 +546,10 @@ const RegistroHorarios = ({ localId, onUpdate, onAlert, observaciones, onObserva
         {/* ── Identificación biométrica ─────────────────────────────────── */}
         <div className="mb-4">
           <IdentificacionBiometrica
-            onEmpleadoIdentificado={(empleado) => {
-              setEmpleadoSeleccionado(empleado)
-              setBusqueda(`${empleado.nombre} ${empleado.apellido}`)
-              setModalRol(true)
+            localId={localId}
+            onRegistrado={async () => {
+              await cargarRegistrosHoy()
+              if (onUpdate) onUpdate()
             }}
             onAlert={onAlert}
           />

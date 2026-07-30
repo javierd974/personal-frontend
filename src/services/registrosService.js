@@ -23,7 +23,7 @@ export const registrosService = {
   },
 
   // Registrar entrada de empleado
-  async registrarEntrada(empleadoId, localId, rolId, observaciones = '') {
+  async registrarEntrada(empleadoId, localId, rolId, observaciones = '', metodo = 'manual') {
     try {
       const user = await getCurrentUser()
       
@@ -60,7 +60,7 @@ export const registrosService = {
           fecha: fechaTurno,
           hora_entrada: new Date().toISOString(),
           registrado_por_entrada: user.id,
-          metodo_registro: 'manual',
+          metodo_registro: metodo,
           observaciones: observaciones
         })
         .select(`

@@ -1,112 +1,111 @@
-import React, { useState, useEffect } from 'react'
-import { Fingerprint, CheckCircle, XCircle, Loader2, UserCheck } from 'lucide-react'
+import React, { useState } from 'react'
+import { Fingerprint, CheckCircle, XCircle, Loader2, LogOut } from 'lucide-react'
 import { biometricoService } from '../../services/biometricoService'
 import { empleadosService } from '../../services/empleadosService'
+import { registrosService } from '../../services/registrosService'
 
-const IdentificacionBiometrica = ({ onEmpleadoIdentificado, onAlert }) => {
-  const [estado, setEstado] = useState('idle')
-  const [empleadoIdentificado, setEmpleadoIdentificado] = useState(null)
-  const [servicioActivo, setServicioActivo] = useState(null)
+// Botón permanente de marcación por huella para la pantalla del encargado.
+// Mismo comportamiento que el kiosco: apoyás el dedo y el sistema decide solo
+// entrada (con el rol del empleado) o salida (si ya tiene un turno abierto).
+const IdentificacionBiometrica = ({ localId, onRegistrado, onAlert }) => {
+  const [estado, setEstado]       = useState('idle') // idle|capturando|identificando|procesando|ok|error
+  const [resultado, setResultado] = useState(null)   // { nombre, accion }
 
-  useEffect(() => {
-    biometricoService.verificarServicio().then(r => setServicioActivo(r.activo))
-  }, [])
+  const volverAIdle = (ms = 3000) => setTimeout(() => setEstado('idle'), ms)
 
-  const handleIdentificar = async () => {
-    setEstado('esperando')
-    setEmpleadoIdentificado(null)
+  const marcarPorHuella = async () => {
+    if (!localId) { onAlert?.({ type: 'error', message: 'Seleccioná un local primero.' }); return }
+    setResultado(null)
+    setEstado('capturando')
 
-    // 1. Capturar huella
-    const capturaResult = await biometricoService.capturarHuella(15000)
-    if (!capturaResult.success) {
-      setEstado('error')
-      onAlert({ type: 'error', message: capturaResult.error })
-      setTimeout(() => setEstado('idle'), 3000)
-      return
+    // 1. Capturar
+    const cap = await biometricoService.capturarHuella(15000)
+    if (!cap.success) {
+      setEstado('error'); onAlert?.({ type: 'error', message: cap.error }); volverAIdle(2500); return
     }
 
+    // 2. Identificar contra las huellas del local
     setEstado('identificando')
-
-    // 2. Traer todos los templates registrados
-    const huellasResult = await biometricoService.getHuellasActivas()
-    if (!huellasResult.success || huellasResult.data.length === 0) {
-      setEstado('noEncontrado')
-      onAlert({ type: 'warning', message: 'No hay huellas registradas en el sistema.' })
-      setTimeout(() => setEstado('idle'), 3000)
-      return
+    const huellas = await biometricoService.getHuellasParaIdentificacion(localId)
+    if (!huellas.success || huellas.data.length === 0) {
+      setEstado('error'); onAlert?.({ type: 'warning', message: 'No hay huellas registradas en este local.' }); volverAIdle(2500); return
     }
-
-
-    // 3. Comparar contra todos los templates
-    const match = await biometricoService.identificarEmpleado(capturaResult.template, huellasResult.data)
+    const match = await biometricoService.identificarEmpleado(cap.template, huellas.data)
     if (!match.encontrado) {
-      setEstado('noEncontrado')
-      onAlert({ type: 'warning', message: 'Huella no reconocida. Podés buscar el empleado manualmente.' })
-      setTimeout(() => setEstado('idle'), 3000)
-      return
+      setEstado('error'); onAlert?.({ type: 'warning', message: 'Huella no reconocida. Podés usar la búsqueda manual.' }); volverAIdle(2500); return
     }
 
-    // 4. Traer datos del empleado identificado
-    const empResult = await empleadosService.getEmpleadoById(match.empleado_id)
-    if (!empResult.success) {
-      setEstado('error')
-      setTimeout(() => setEstado('idle'), 3000)
-      return
+    // 3. Datos del empleado
+    const empRes = await empleadosService.getEmpleadoById(match.empleado_id)
+    if (!empRes.success) {
+      setEstado('error'); onAlert?.({ type: 'error', message: 'No se pudo cargar el empleado.' }); volverAIdle(2500); return
+    }
+    const emp = empRes.data
+    const nombre = `${emp.nombre} ${emp.apellido}`
+
+    // 4. ¿Tiene turno abierto? → decide entrada/salida
+    setEstado('procesando')
+    const chk = await registrosService.puedeRegistrarEntrada(emp.id)
+    if (!chk.success) {
+      setEstado('error'); onAlert?.({ type: 'error', message: chk.error }); volverAIdle(3000); return
     }
 
-    setEstado('ok')
-    setEmpleadoIdentificado(empResult.data)
-    onEmpleadoIdentificado(empResult.data)
+    if (chk.puede) {
+      // ── ENTRADA (rol automático) ──
+      if (!emp.rol_id) {
+        setEstado('error')
+        onAlert?.({ type: 'error', message: `${nombre} no tiene un rol asignado. Cargalo en la ficha del empleado.` })
+        volverAIdle(3500); return
+      }
+      const res = await registrosService.registrarEntrada(emp.id, localId, emp.rol_id, '', 'biometrico')
+      if (!res.success) {
+        setEstado('error'); onAlert?.({ type: 'error', message: res.error }); volverAIdle(3000); return
+      }
+      setResultado({ nombre, accion: 'entrada' })
+      setEstado('ok'); onAlert?.({ type: 'success', message: `Entrada registrada: ${nombre}` })
+    } else {
+      // ── SALIDA ──
+      const res = await registrosService.registrarSalida(chk.registroActivo.id)
+      if (!res.success) {
+        setEstado('error'); onAlert?.({ type: 'error', message: res.error }); volverAIdle(3000); return
+      }
+      setResultado({ nombre, accion: 'salida' })
+      setEstado('ok'); onAlert?.({ type: 'success', message: `Salida registrada: ${nombre}` })
+    }
+
+    if (onRegistrado) await onRegistrado()
+    volverAIdle(3500)
   }
 
-  const resetear = () => {
-    setEstado('idle')
-    setEmpleadoIdentificado(null)
-  }
-
-  // Si confirmamos que no está disponible, no mostrar nada
-  // null = cargando todavía → mostramos el botón igual (optimista)
-  if (servicioActivo === false) return null
+  const trabajando = estado === 'capturando' || estado === 'identificando' || estado === 'procesando'
+  const esSalida = resultado?.accion === 'salida'
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <button
-        onClick={estado === 'ok' ? resetear : handleIdentificar}
-        disabled={estado === 'esperando' || estado === 'identificando'}
-        className={`w-full py-5 rounded-xl font-bold text-lg transition-all flex items-center justify-center gap-3 shadow-lg ${
-          estado === 'ok' ? 'bg-green-600 hover:bg-green-700 text-white'
-          : estado === 'noEncontrado' || estado === 'error' ? 'bg-red-500 hover:bg-red-600 text-white'
-          : 'bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-60'
+        onClick={marcarPorHuella}
+        disabled={trabajando}
+        className={`w-full py-5 rounded-xl font-bold text-lg transition-all flex items-center justify-center gap-3 shadow-lg text-white ${
+          estado === 'ok' ? (esSalida ? 'bg-amber-600' : 'bg-green-600')
+          : estado === 'error' ? 'bg-red-500'
+          : 'bg-indigo-600 hover:bg-indigo-700 disabled:opacity-70'
         }`}>
-        {(estado === 'esperando' || estado === 'identificando') && <Loader2 className="w-6 h-6 animate-spin" />}
-        {estado === 'ok' && <UserCheck className="w-6 h-6" />}
-        {estado === 'noEncontrado' && <XCircle className="w-6 h-6" />}
+        {trabajando && <Loader2 className="w-6 h-6 animate-spin" />}
+        {estado === 'ok' && (esSalida ? <LogOut className="w-6 h-6" /> : <CheckCircle className="w-6 h-6" />)}
+        {estado === 'error' && <XCircle className="w-6 h-6" />}
         {estado === 'idle' && <Fingerprint className="w-6 h-6" />}
         <span>
           {estado === 'idle' && 'IDENTIFICAR POR HUELLA'}
-          {estado === 'esperando' && 'Apoyá el dedo...'}
+          {estado === 'capturando' && 'Apoyá el dedo...'}
           {estado === 'identificando' && 'Identificando...'}
-          {estado === 'ok' && `${empleadoIdentificado?.nombre} ${empleadoIdentificado?.apellido}`}
-          {estado === 'noEncontrado' && 'No reconocido — usá búsqueda manual'}
-          {estado === 'error' && 'Error — intentá de nuevo'}
+          {estado === 'procesando' && 'Registrando...'}
+          {estado === 'ok' && (esSalida ? `Salida — ${resultado.nombre}` : `Entrada — ${resultado.nombre}`)}
+          {estado === 'error' && 'Reintentá'}
         </span>
       </button>
 
-
-      {estado === 'esperando' && (
-        <p className="text-center text-sm text-gray-500 animate-pulse">Tiempo límite: 15 segundos</p>
-      )}
-
-      {estado === 'ok' && empleadoIdentificado && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center gap-3">
-          <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-          <div>
-            <p className="text-sm font-semibold text-green-900">
-              {empleadoIdentificado.nombre} {empleadoIdentificado.apellido}
-            </p>
-            <p className="text-xs text-green-700">DNI: {empleadoIdentificado.documento}</p>
-          </div>
-        </div>
+      {estado === 'capturando' && (
+        <p className="text-center text-sm text-gray-500 animate-pulse">Apoyá el dedo en el lector (hasta 15s)</p>
       )}
     </div>
   )
