@@ -27,6 +27,12 @@ const ERROR_HOLD_MS   = 3500   // cuánto se muestra un error / huella no recono
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 
+// Candado a nivel de módulo: garantiza que UNA sola lectura se procese a la vez
+// de punta a punta (identificar + decidir + registrar + cooldown), aunque haya
+// más de un loop de captura corriendo (StrictMode en dev, o varias pestañas).
+// Evita la condición de carrera que insertaba dos entradas simultáneas.
+let procesandoLectura = false
+
 export default function Kiosco() {
   const [estado, setEstado]               = useState(ESTADOS.LISTO)
   const [accion, setAccion]               = useState(null)
@@ -105,7 +111,16 @@ export default function Kiosco() {
 
       fallosRapidos = 0
       setLectorActivo(true)
-      await procesarLectura(cap.template, token)   // maneja estados + cooldown y vuelve a LISTO
+
+      // Candado: si ya hay una lectura en curso (otro loop / otra pestaña),
+      // descartamos esta captura para no marcar dos veces.
+      if (procesandoLectura) { await sleep(400); continue }
+      procesandoLectura = true
+      try {
+        await procesarLectura(cap.template, token)   // identificar + decidir + registrar + cooldown
+      } finally {
+        procesandoLectura = false
+      }
     }
   }
 
