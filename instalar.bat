@@ -165,6 +165,11 @@ if "%CHROME_OK%"=="0" (
     echo        [ADVERTENCIA] No se encontro Google Chrome. Instalalo para el modo kiosco
     echo        ^(en Windows 7 usar la ultima version compatible, Chrome 109^).
 )
+
+:: Politica de Chrome: autorizar a la app (publica) a hablar con el lector en
+:: localhost. Sin esto, Chrome bloquea el fetch por Private Network Access (CORS).
+reg add "HKLM\SOFTWARE\Policies\Google\Chrome\InsecurePrivateNetworkRequestsAllowedForUrls" /v 1 /t REG_SZ /d "https://personal.losnotables.cloud" /f >nul 2>&1
+echo        Politica de Chrome aplicada (acceso al lector en localhost).
 echo.
 
 :: -- PASO FINAL: Diagnostico del lector + reporte al tablero -----------------
