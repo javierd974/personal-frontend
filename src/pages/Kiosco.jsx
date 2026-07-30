@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { biometricoService } from '../services/biometricoService'
-import { registrosService } from '../services/registrosService'
-import { rolesService, localesService } from '../services/catalogosService'
+import { localesService } from '../services/catalogosService'
 import { createClient } from '@supabase/supabase-js'
 
 // Cliente Supabase anon para el kiosco (funciona sin sesión)
@@ -11,39 +10,46 @@ const supabaseKiosco = createClient(
 )
 
 const ESTADOS = {
-  LISTO:        'listo',
-  LEYENDO:      'leyendo',
-  IDENTIFICANDO:'identificando',
-  CONFIRMAR:    'confirmar',
-  PROCESANDO:   'procesando',
-  EXITO:        'exito',
-  ERROR:        'error',
-  SIN_HUELLA:   'sin_huella',
+  LISTO:         'listo',          // esperando dedo (lectura automática en curso)
+  IDENTIFICANDO: 'identificando',  // huella capturada, buscando empleado
+  PROCESANDO:    'procesando',     // registrando entrada/salida
+  EXITO:         'exito',
+  ERROR:         'error',
+  SIN_HUELLA:    'sin_huella',
 }
 
 const ACCION = { ENTRADA: 'entrada', SALIDA: 'salida' }
+
+// Tiempos (ms)
+const CAPTURE_TIMEOUT = 10000  // cuánto espera cada intento de captura un dedo
+const COOLDOWN_MS     = 10000  // pausa tras una marcación exitosa (evita doble lectura)
+const ERROR_HOLD_MS   = 3500   // cuánto se muestra un error / huella no reconocida
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 
 export default function Kiosco() {
   const [estado, setEstado]               = useState(ESTADOS.LISTO)
   const [accion, setAccion]               = useState(null)
   const [empleado, setEmpleado]           = useState(null)
   const [registro, setRegistro]           = useState(null)
-  const [roles, setRoles]                 = useState([])
-  const [rolSeleccionado, setRolSeleccionado] = useState(null)
   const [mensaje, setMensaje]             = useState('')
   const [localId, setLocalId]             = useState(null)
   const [localNombre, setLocalNombre]     = useState('')
   const [locales, setLocales]             = useState([])
   const [eligiendoLocal, setEligiendoLocal] = useState(false)
-  const timeoutRef                        = useRef(null)
+  const [lectorActivo, setLectorActivo]   = useState(true)
+
+  const loopTokenRef = useRef(0)     // token del loop activo (evita loops duplicados)
+  const localIdRef = useRef(null)    // localId siempre actualizado para el loop
   const STORAGE_KEY = 'kiosco_local_id'
   const STORAGE_NOMBRE = 'kiosco_local_nombre'
 
+  useEffect(() => { localIdRef.current = localId }, [localId])
+
+  // Cargar local guardado (localStorage o ?local= en la URL)
   useEffect(() => {
-    // 1. Intentar leer local guardado en localStorage
     const lidGuardado = localStorage.getItem(STORAGE_KEY)
     const nombreGuardado = localStorage.getItem(STORAGE_NOMBRE)
-    // 2. Leer también desde URL (tiene prioridad)
     const params = new URLSearchParams(window.location.search)
     const lidUrl = params.get('local')
     const lid = lidUrl || lidGuardado
@@ -52,12 +58,16 @@ export default function Kiosco() {
       setLocalNombre(nombreGuardado || '')
       localStorage.setItem(STORAGE_KEY, lid)
     }
-    rolesService.getRoles().then(r => { if (r.success) setRoles(r.data) })
-    // También cargar roles con supabaseKiosco como fallback
-    supabaseKiosco.from('roles').select('*').eq('activo', true).order('nombre')
-      .then(({ data }) => { if (data?.length) setRoles(data) })
-    return () => clearTimeout(timeoutRef.current)
   }, [])
+
+  // Loop de lectura automática: arranca cuando hay local seleccionado
+  useEffect(() => {
+    if (!localId) return
+    const token = ++loopTokenRef.current
+    loopCaptura(token)
+    return () => { loopTokenRef.current++ }   // invalida el loop actual
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localId])
 
   const abrirSelectorLocal = async () => {
     const result = await localesService.getLocalesUsuario()
@@ -73,159 +83,119 @@ export default function Kiosco() {
     setEligiendoLocal(false)
   }
 
-  const resetear = (delay = 0) => {
-    clearTimeout(timeoutRef.current)
-    timeoutRef.current = setTimeout(() => {
-      setEstado(ESTADOS.LISTO)
-      setAccion(null)
-      setEmpleado(null)
-      setRegistro(null)
-      setRolSeleccionado(null)
-      setMensaje('')
-    }, delay)
+  // ── Loop principal de captura ──────────────────────────────────────────────
+  const loopCaptura = async (token) => {
+    let fallosRapidos = 0
+    while (loopTokenRef.current === token) {
+      const t0 = Date.now()
+      let cap
+      try { cap = await biometricoService.capturarHuella(CAPTURE_TIMEOUT) }
+      catch { cap = { success: false } }
+      if (loopTokenRef.current !== token) break
+
+      if (!cap.success) {
+        // Sin dedo (timeout normal) vs. lector caído: si falla muy rápido y
+        // repetido, asumimos lector desconectado.
+        const elapsed = Date.now() - t0
+        if (elapsed < 1500) { fallosRapidos++ } else { fallosRapidos = 0 }
+        setLectorActivo(fallosRapidos < 3)
+        await sleep(elapsed < 1500 ? 1200 : 300)
+        continue
+      }
+
+      fallosRapidos = 0
+      setLectorActivo(true)
+      await procesarLectura(cap.template, token)   // maneja estados + cooldown y vuelve a LISTO
+    }
   }
 
-  const iniciarLectura = async (accionElegida) => {
-    setAccion(accionElegida)
-    setEstado(ESTADOS.LEYENDO)
-    setEmpleado(null)
-    setMensaje('')
+  const finLectura = async (nuevoEstado, info, holdMs, token) => {
+    setEmpleado(info.empleado || null)
+    setAccion(info.accion || null)
+    setRegistro(info.registro || null)
+    setMensaje(info.mensaje || '')
+    setEstado(nuevoEstado)
+    await sleep(holdMs)                     // durante este tiempo el loop NO captura
+    if (loopTokenRef.current !== token) return
+    setEstado(ESTADOS.LISTO)
+    setEmpleado(null); setAccion(null); setRegistro(null); setMensaje('')
+  }
 
-    const capturaResult = await biometricoService.capturarHuella(12000)
-    if (!capturaResult.success) {
-      setEstado(ESTADOS.ERROR)
-      setMensaje(capturaResult.error)
-      resetear(3500)
-      return
-    }
-
+  const procesarLectura = async (template, token) => {
+    const lid = localIdRef.current
     setEstado(ESTADOS.IDENTIFICANDO)
-    const huellasResult = await biometricoService.getHuellasParaIdentificacion(localId)
+
+    // 1. Traer huellas del local e identificar
+    const huellasResult = await biometricoService.getHuellasParaIdentificacion(lid)
     if (!huellasResult.success || huellasResult.data.length === 0) {
-      setEstado(ESTADOS.ERROR)
-      setMensaje('No hay huellas registradas en este local. Consultá al encargado.')
-      resetear(4000)
-      return
+      return finLectura(ESTADOS.ERROR, { mensaje: 'No hay huellas registradas en este local. Consultá al encargado.' }, ERROR_HOLD_MS, token)
     }
-
-    const match = await biometricoService.identificarEmpleado(capturaResult.template, huellasResult.data)
+    const match = await biometricoService.identificarEmpleado(template, huellasResult.data)
     if (!match.encontrado) {
-      setEstado(ESTADOS.SIN_HUELLA)
-      setMensaje('Huella no reconocida. Consultá al encargado.')
-      resetear(4000)
-      return
+      return finLectura(ESTADOS.SIN_HUELLA, { mensaje: 'Huella no reconocida. Consultá al encargado.' }, ERROR_HOLD_MS, token)
     }
 
-    // Traer datos del empleado incluyendo su rol por defecto
-    const { data: emp } = await supabaseKiosco
+    // 2. Datos del empleado (incluye su rol por defecto)
+    const { data: emp, error: empErr } = await supabaseKiosco
       .from('empleados')
       .select('*, rol:roles(id, nombre)')
       .eq('id', match.empleado_id)
       .single()
-    setEmpleado(emp)
-
-    if (accionElegida === ACCION.ENTRADA) {
-      if (emp?.rol_id && emp?.rol) {
-        // Tiene rol asignado → registrar directamente sin preguntar
-        await procesarEntradaDirecta(emp, emp.rol)
-      } else {
-        // Sin rol asignado → mostrar selector
-        setEstado(ESTADOS.CONFIRMAR)
-      }
-    } else {
-      await procesarSalida(emp)
+    if (empErr || !emp) {
+      return finLectura(ESTADOS.ERROR, { mensaje: 'No se pudo cargar el empleado. Intentá de nuevo.' }, ERROR_HOLD_MS, token)
     }
-  }
 
+    // 3. ¿Tiene un registro abierto (entrada sin salida)? → decide la acción
+    const { data: abiertos } = await supabaseKiosco
+      .from('registros_horarios')
+      .select('id, hora_entrada, rol:roles(nombre)')
+      .eq('empleado_id', emp.id)
+      .is('hora_salida', null)
+      .order('hora_entrada', { ascending: false })
+      .limit(1)
+    const regAbierto = abiertos && abiertos[0]
 
-  // Entrada con rol conocido (sin preguntar)
-  const procesarEntradaDirecta = async (emp, rol) => {
-    if (!localId) return
     setEstado(ESTADOS.PROCESANDO)
     const ahora = new Date().toISOString()
+
+    if (regAbierto) {
+      // ── SALIDA ──
+      const { data, error } = await supabaseKiosco
+        .from('registros_horarios')
+        .update({ hora_salida: ahora })
+        .eq('id', regAbierto.id)
+        .select('*, rol:roles(nombre)')
+        .single()
+      if (error) {
+        return finLectura(ESTADOS.ERROR, { empleado: emp, mensaje: error.message }, ERROR_HOLD_MS, token)
+      }
+      return finLectura(ESTADOS.EXITO, { empleado: emp, accion: ACCION.SALIDA, registro: data }, COOLDOWN_MS, token)
+    }
+
+    // ── ENTRADA (rol automático desde el empleado) ──
+    if (!emp.rol_id) {
+      return finLectura(ESTADOS.ERROR, {
+        empleado: emp,
+        mensaje: `${emp.nombre} no tiene un rol asignado. Avisá al encargado para cargarlo.`
+      }, ERROR_HOLD_MS, token)
+    }
     const fecha = ahora.split('T')[0]
     const { data, error } = await supabaseKiosco
       .from('registros_horarios')
       .insert({
         empleado_id: emp.id,
-        local_id: localId,
-        rol_id: rol.id,
+        local_id: lid,
+        rol_id: emp.rol_id,
         fecha,
         hora_entrada: ahora,
         metodo_registro: 'biometrico'
       })
       .select('*, rol:roles(nombre)')
       .single()
-    if (!error) {
-      setRegistro(data)
-      setEstado(ESTADOS.EXITO)
-      resetear(4000)
-    } else {
-      setEstado(ESTADOS.ERROR)
-      setMensaje(error.message)
-      resetear(4000)
+    if (error) {
+      return finLectura(ESTADOS.ERROR, { empleado: emp, mensaje: error.message }, ERROR_HOLD_MS, token)
     }
-  }
-
-  const procesarEntrada = async (rol) => {
-    setEstado(ESTADOS.PROCESANDO)
-    const ahora = new Date().toISOString()
-    const fecha = ahora.split('T')[0]
-    const { data, error } = await supabaseKiosco
-      .from('registros_horarios')
-      .insert({
-        empleado_id: empleado.id,
-        local_id: localId,
-        rol_id: rol.id,
-        fecha,
-        hora_entrada: ahora,
-        metodo_registro: 'biometrico'
-      })
-      .select('*, rol:roles(nombre)')
-      .single()
-    if (!error) {
-      setRegistro(data)
-      setEstado(ESTADOS.EXITO)
-      resetear(4000)
-    } else {
-      setEstado(ESTADOS.ERROR)
-      setMensaje(error.message)
-      resetear(4000)
-    }
-  }
-
-  const procesarSalida = async (emp) => {
-    setEstado(ESTADOS.PROCESANDO)
-    // Buscar registro abierto del empleado
-    const { data: regAbierto } = await supabaseKiosco
-      .from('registros_horarios')
-      .select('*, rol:roles(nombre)')
-      .eq('empleado_id', emp.id)
-      .is('hora_salida', null)
-      .maybeSingle()
-
-    if (!regAbierto) {
-      setEstado(ESTADOS.ERROR)
-      setMensaje('No hay ingreso registrado hoy. Consultá al encargado.')
-      resetear(4000)
-      return
-    }
-
-    const result = await supabaseKiosco
-      .from('registros_horarios')
-      .update({ hora_salida: new Date().toISOString() })
-      .eq('id', regAbierto.id)
-      .select()
-      .single()
-    if (!result.error) {
-      setRegistro(regAbierto)
-      setEstado(ESTADOS.EXITO)
-      resetear(4000)
-    } else {
-      setEstado(ESTADOS.ERROR)
-      setMensaje(result.error.message)
-      resetear(4000)
-    }
+    return finLectura(ESTADOS.EXITO, { empleado: emp, accion: ACCION.ENTRADA, registro: data }, COOLDOWN_MS, token)
   }
 
   const hora = new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false })
@@ -286,43 +256,21 @@ export default function Kiosco() {
           accion={accion}
           mensaje={mensaje}
           registro={registro}
+          lectorActivo={lectorActivo}
         />
       </div>
 
-      {/* Selector de rol — solo aparece para entrada después de identificar */}
-      {estado === ESTADOS.CONFIRMAR && roles.length > 0 && (
-        <div style={estilos.roles}>
-          <p style={estilos.rolesLabel}>Seleccioná tu rol</p>
-          <div style={estilos.rolesGrid}>
-            {roles.map(rol => (
-              <button key={rol.id} style={estilos.rolBtn} onClick={() => procesarEntrada(rol)}>
-                {rol.nombre}
-              </button>
-            ))}
-          </div>
-          <button style={estilos.cancelarBtn} onClick={() => resetear(0)}>Cancelar</button>
-        </div>
-      )}
-
-      {/* Botones principales — solo en estado LISTO */}
-      {estado === ESTADOS.LISTO && (
-        <div style={estilos.botones}>
-          <button style={{...estilos.boton, ...estilos.botonEntrada}}
-            onClick={() => iniciarLectura(ACCION.ENTRADA)}>
-            <span style={estilos.botonIcono}>↓</span>
-            <span style={estilos.botonTexto}>ENTRADA</span>
-          </button>
-          <button style={{...estilos.boton, ...estilos.botonSalida}}
-            onClick={() => iniciarLectura(ACCION.SALIDA)}>
-            <span style={estilos.botonIcono}>↑</span>
-            <span style={estilos.botonTexto}>SALIDA</span>
-          </button>
-        </div>
-      )}
-
       {/* Footer */}
       <footer style={estilos.footer}>
-        <span>SmartDom · Sistema Biométrico</span>
+        <span style={{display:'inline-flex', alignItems:'center', gap:'8px'}}>
+          <span style={{
+            width:'8px', height:'8px', borderRadius:'50%',
+            background: lectorActivo ? '#22c55e' : '#ef4444',
+            boxShadow: lectorActivo ? '0 0 8px #22c55e88' : 'none'
+          }} />
+          {lectorActivo ? 'Lector conectado' : 'Lector desconectado — verificá el dispositivo'}
+          <span style={{color:'#1e293b'}}>·</span> SmartDom · Sistema Biométrico
+        </span>
       </footer>
     </div>
   )
@@ -330,36 +278,29 @@ export default function Kiosco() {
 
 
 // Componente del display central
-function DisplayEstado({ estado, empleado, accion, mensaje, registro }) {
+function DisplayEstado({ estado, empleado, accion, mensaje, registro, lectorActivo }) {
   const nombre = empleado ? `${empleado.nombre} ${empleado.apellido}` : ''
   const rolNombre = empleado?.rol?.nombre || registro?.rol?.nombre || ''
+  const horaAhora = new Date().toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit',hour12:false})
 
   const contenidos = {
-    [ESTADOS.LISTO]: {
+    [ESTADOS.LISTO]: lectorActivo ? {
       icono: '☞',
       titulo: 'Apoyá el dedo',
-      sub: 'y presioná ENTRADA o SALIDA',
+      sub: 'El sistema marca tu entrada o salida automáticamente',
       color: '#94a3b8'
-    },
-    [ESTADOS.LEYENDO]: {
-      icono: '◎',
-      titulo: 'Leyendo huella...',
-      sub: 'Mantené el dedo apoyado',
-      color: '#f59e0b',
-      pulsar: true
+    } : {
+      icono: '⚠',
+      titulo: 'Lector desconectado',
+      sub: 'Revisá que el lector esté enchufado. Reintentando...',
+      color: '#ef4444'
     },
     [ESTADOS.IDENTIFICANDO]: {
       icono: '⟳',
       titulo: 'Identificando...',
-      sub: '',
+      sub: 'Mantené el dedo apoyado',
       color: '#f59e0b',
       pulsar: true
-    },
-    [ESTADOS.CONFIRMAR]: {
-      icono: '✓',
-      titulo: nombre,
-      sub: 'Identificado — seleccioná tu rol',
-      color: '#22c55e'
     },
     [ESTADOS.PROCESANDO]: {
       icono: '⟳',
@@ -369,16 +310,16 @@ function DisplayEstado({ estado, empleado, accion, mensaje, registro }) {
       pulsar: true
     },
     [ESTADOS.EXITO]: {
-      icono: '✓',
+      icono: accion === ACCION.ENTRADA ? '↓' : '↑',
       titulo: nombre,
       sub: accion === ACCION.ENTRADA
-        ? `Ingreso registrado · ${rolNombre ? rolNombre + ' · ' : ''}${new Date().toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit',hour12:false})}`
-        : `Salida registrada · ${new Date().toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit',hour12:false})}`,
+        ? `Entrada registrada · ${rolNombre ? rolNombre + ' · ' : ''}${horaAhora}`
+        : `Salida registrada · ${horaAhora}`,
       color: '#22c55e'
     },
     [ESTADOS.ERROR]: {
       icono: '✕',
-      titulo: 'Error',
+      titulo: empleado ? nombre : 'Error',
       sub: mensaje,
       color: '#ef4444'
     },
@@ -499,91 +440,12 @@ const estilos = {
     fontWeight: '400',
     letterSpacing: '0.01em',
   },
-  botones: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '20px',
-    width: '100%',
-    maxWidth: '680px',
-    padding: '0 48px 48px',
-    zIndex: 1,
-  },
-  boton: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '12px',
-    padding: '40px 24px',
-    borderRadius: '20px',
-    border: 'none',
-    cursor: 'pointer',
-    transition: 'transform 0.15s ease, filter 0.15s ease',
-    outline: 'none',
-    WebkitTapHighlightColor: 'transparent',
-  },
-  botonEntrada: {
-    background: 'linear-gradient(135deg, #166534 0%, #15803d 100%)',
-    boxShadow: '0 8px 32px #16653440, inset 0 1px 0 #ffffff20',
-  },
-  botonSalida: {
-    background: 'linear-gradient(135deg, #7c2d12 0%, #b45309 100%)',
-    boxShadow: '0 8px 32px #b4530940, inset 0 1px 0 #ffffff20',
-  },
-  botonIcono: {
-    fontSize: '40px',
-    color: '#fff',
-    lineHeight: 1,
-  },
-  botonTexto: {
-    fontSize: '22px',
-    fontWeight: '800',
-    color: '#fff',
-    letterSpacing: '0.12em',
-  },
   roles: {
     width: '100%',
     maxWidth: '680px',
     padding: '0 48px 48px',
     zIndex: 1,
     textAlign: 'center',
-  },
-  rolesLabel: {
-    fontSize: '16px',
-    color: '#64748b',
-    marginBottom: '16px',
-    letterSpacing: '0.05em',
-    textTransform: 'uppercase',
-    fontWeight: '600',
-  },
-  rolesGrid: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '12px',
-    justifyContent: 'center',
-    marginBottom: '16px',
-  },
-  rolBtn: {
-    padding: '18px 32px',
-    borderRadius: '14px',
-    border: '1px solid #334155',
-    background: '#1e293b',
-    color: '#e2e8f0',
-    fontSize: '17px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    letterSpacing: '0.03em',
-    transition: 'background 0.15s ease',
-  },
-  cancelarBtn: {
-    padding: '12px 24px',
-    borderRadius: '10px',
-    border: '1px solid #1e293b',
-    background: 'transparent',
-    color: '#475569',
-    fontSize: '14px',
-    cursor: 'pointer',
-    letterSpacing: '0.05em',
   },
   selectorOverlay: {
     position: 'fixed', inset: 0,
@@ -622,6 +484,16 @@ const estilos = {
     transition: 'background 0.15s ease',
     width: '100%',
   },
+  cancelarBtn: {
+    padding: '12px 24px',
+    borderRadius: '10px',
+    border: '1px solid #1e293b',
+    background: 'transparent',
+    color: '#475569',
+    fontSize: '14px',
+    cursor: 'pointer',
+    letterSpacing: '0.05em',
+  },
   localBtn: {
     padding: '6px 14px',
     borderRadius: '8px',
@@ -638,8 +510,8 @@ const estilos = {
     textAlign: 'center',
     padding: '20px',
     fontSize: '12px',
-    color: '#1e293b',
-    letterSpacing: '0.1em',
+    color: '#475569',
+    letterSpacing: '0.08em',
     zIndex: 1,
     borderTop: '1px solid #ffffff06',
   },
