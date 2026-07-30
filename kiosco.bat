@@ -11,12 +11,16 @@ set PROD_URL=https://personal.losnotables.cloud
 
 set URL=%PROD_URL%/kiosco?local=%LOCAL_ID%
 
-:: -- 1. Asegurar que el WebAPI SecuGen (sgibiosrv) este corriendo ------------
-tasklist /FI "IMAGENAME eq sgibiosrv.exe" 2>NUL | find /I "sgibiosrv.exe" >NUL
+:: -- 1. Asegurar que el WebAPI SecuGen escuche en HTTPS 8443 -----------------
+:: IMPORTANTE: sgibiosrv necesita los argumentos "-s -p:8443" para servir HTTPS.
+:: Sin argumentos arranca en HTTP 8000 y la app (que usa 8443) no lo alcanza.
+netstat -ano | findstr ":8443" | findstr LISTENING >NUL
 if errorlevel 1 (
-    if exist "C:\Program Files\SecuGen\SgiBioSrv\sgibiosrv.exe" start "" "C:\Program Files\SecuGen\SgiBioSrv\sgibiosrv.exe"
-    if exist "C:\Program Files (x86)\SecuGen\SgiBioSrv\sgibiosrv.exe" start "" "C:\Program Files (x86)\SecuGen\SgiBioSrv\sgibiosrv.exe"
-    timeout /t 2 /nobreak >NUL
+    :: 8443 no esta escuchando: matar cualquier instancia (por si quedo en 8000) y relanzar bien
+    taskkill /F /IM sgibiosrv.exe >NUL 2>&1
+    if exist "C:\Program Files\SecuGen\SgiBioSrv\sgibiosrv.exe" start "" /D "C:\Program Files\SecuGen\SgiBioSrv" "C:\Program Files\SecuGen\SgiBioSrv\sgibiosrv.exe" -s -p:8443
+    if exist "C:\Program Files (x86)\SecuGen\SgiBioSrv\sgibiosrv.exe" start "" /D "C:\Program Files (x86)\SecuGen\SgiBioSrv" "C:\Program Files (x86)\SecuGen\SgiBioSrv\sgibiosrv.exe" -s -p:8443
+    timeout /t 3 /nobreak >NUL
 )
 
 :: -- 2. Abrir Chrome en modo kiosco -----------------------------------------

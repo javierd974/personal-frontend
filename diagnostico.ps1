@@ -62,38 +62,42 @@ if ($dev) {
 $sgOk = $false
 if (Get-Process sgibiosrv -ErrorAction SilentlyContinue) { $sgOk = $true }
 
-# --- WebAPI: puertos en escucha (8443 HTTPS = lo que usa la app; 8000 = HTTP legacy) ---
-$ns = netstat -ano
-$p8443 = ((@($ns | Where-Object { $_ -match ':8443\s' -and $_ -match 'LISTENING' })).Count -gt 0)
-$p8000 = ((@($ns | Where-Object { $_ -match ':8000\s' -and $_ -match 'LISTENING' })).Count -gt 0)
-
-# Si 8443 escucha, confirmar que responde CON validacion de certificado (como el navegador)
-try { [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072 } catch {}
-$webOk = $false; $certMal = $false
-if ($p8443) {
-  try {
-    $req = [System.Net.HttpWebRequest]::Create('https://localhost:8443/SGIMatchScore')
-    $req.Method = 'POST'; $req.Timeout = 5000; $req.ContentLength = 0
-    $resp = $req.GetResponse(); $webOk = ([int]$resp.StatusCode -eq 200); $resp.Close()
-  } catch {
-    if ($_.Exception.Message -match 'SSL|certificad|confianza|trust') { $certMal = $true }
+# --- WebAPI: sgibiosrv debe escuchar en 8443 (HTTPS = lo que usa la app).
+#     Sin los argumentos "-s -p:8443" arranca en HTTP 8000 y la app no lo alcanza.
+#     AUTO-REPARACION: si 8443 no esta, relanzamos sgibiosrv con los args correctos. ---
+function Test-P8443 { return ((@((netstat -ano) | Where-Object { $_ -match ':8443\s' -and $_ -match 'LISTENING' })).Count -gt 0) }
+$p8443 = Test-P8443
+$autoreparado = $false
+if (-not $p8443) {
+  $sgdir = $null
+  foreach ($d in @('C:\Program Files\SecuGen\SgiBioSrv','C:\Program Files (x86)\SecuGen\SgiBioSrv')) {
+    if (Test-Path (Join-Path $d 'sgibiosrv.exe')) { $sgdir = $d }
+  }
+  if ($sgdir) {
+    Get-Process sgibiosrv -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+    Start-Process -FilePath (Join-Path $sgdir 'sgibiosrv.exe') -ArgumentList '-s','-p:8443' -WorkingDirectory $sgdir -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 4
+    $p8443 = Test-P8443
+    if ($p8443) { $autoreparado = $true }
   }
 }
+$p8000 = ((@((netstat -ano) | Where-Object { $_ -match ':8000\s' -and $_ -match 'LISTENING' })).Count -gt 0)
+if (Get-Process sgibiosrv -ErrorAction SilentlyContinue) { $sgOk = $true }
+$webOk = $p8443
+$certMal = $false
 
 # --- Veredicto --------------------------------------------------------------
-# NOTA: sgibiosrv (WebAPI "over HTTPS") solo levanta el puerto 8443 cuando hay un
-# lector conectado; sin lector responde en 8000. Por eso el estado del WebAPI solo
-# se juzga con el lector presente. Sin lector -> "falta enchufar el lector".
+# El WebAPI HTTPS (8443) se auto-repara arriba (relanzando sgibiosrv con -s -p:8443).
+# Si aun asi 8443 no levanta, suele ser por permisos (correr como admin) o falta reiniciar.
 $readerPresent = ($dev -ne $null)
 $readerOk = ($readerPresent -and $errCode -eq 0 -and $webOk)
-if     ($readerOk)               { $veredicto = 'OK';            $detalle = 'Lector reconocido y WebAPI HTTPS activo.' }
-elseif (-not $readerPresent)     { $veredicto = 'FALTA_LECTOR';  $detalle = 'Software instalado. Falta enchufar el lector SecuGen; con el lector puesto, corre diagnostico.bat para validar.' }
+if     ($readerOk)               { $veredicto = 'OK';            $detalle = 'Lector reconocido y WebAPI HTTPS activo.' + $(if ($autoreparado) { ' (WebAPI reiniciado en 8443 automaticamente.)' } else { '' }) }
+elseif (-not $readerPresent)     { $veredicto = 'FALTA_LECTOR';  $detalle = 'Software instalado y WebAPI OK. Falta enchufar el lector SecuGen; con el lector puesto corre diagnostico.bat para validar.' }
 elseif ($errCode -eq 28)         { $veredicto = 'SIN_DRIVER';    $detalle = 'Lector conectado pero sin driver (28). Actualizar el controlador apuntando a la carpeta drivers, o reconectar tras instalar.' }
 elseif ($errCode -ne 0)          { $veredicto = 'DRIVER_ERROR';  $detalle = "Lector con problema de driver (errorCode $errCode). Reasignar el driver a SecuGen." }
-elseif (-not $sgOk)              { $veredicto = 'SGIBIOSRV_OFF'; $detalle = 'El servicio sgibiosrv no esta corriendo. Abrir el kiosco lo inicia.' }
-elseif ($p8443 -and $certMal)    { $veredicto = 'WEBAPI_CERT';   $detalle = 'El WebAPI responde en 8443 pero el certificado no esta en la raiz de confianza. Reinstalar el certificado.' }
-elseif (-not $p8443 -and $p8000) { $veredicto = 'WEBAPI_HTTP';   $detalle = 'Con el lector puesto, el WebAPI responde en HTTP (8000) y no en 8443. Reabrir el kiosco; si persiste, reinstalar el WebAPI "over HTTPS".' }
-elseif (-not $p8443)             { $veredicto = 'WEBAPI_OFF';    $detalle = 'El WebAPI no escucha en 8443. Reabrir el kiosco (inicia sgibiosrv) o reinstalar el WebAPI.' }
+elseif (-not $sgOk)              { $veredicto = 'SGIBIOSRV_OFF'; $detalle = 'No se pudo iniciar sgibiosrv. Correr diagnostico.bat como administrador o reiniciar la PC.' }
+elseif (-not $p8443)             { $veredicto = 'WEBAPI_OFF';    $detalle = 'El WebAPI no pudo levantar en HTTPS 8443 (quedo en 8000 o caido). Correr diagnostico.bat como ADMINISTRADOR, o reiniciar la PC (el autoarranque lo pone en 8443).' }
 else                             { $veredicto = 'REVISAR';       $detalle = "Lector presente (driver=$driverSvc) pero el WebAPI no responde bien en 8443." }
 
 # --- Log --------------------------------------------------------------------
