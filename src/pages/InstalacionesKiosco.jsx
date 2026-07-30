@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Monitor, ArrowLeft, RefreshCw, CheckCircle, AlertTriangle, Loader2, Fingerprint } from 'lucide-react'
+import { Monitor, ArrowLeft, RefreshCw, CheckCircle, AlertTriangle, Loader2, Fingerprint, Usb } from 'lucide-react'
 import { authService } from '../services/authService'
 import { instalacionesService } from '../services/instalacionesService'
 
@@ -9,6 +9,7 @@ const ROLES_AUTORIZADOS = ['admin', 'rrhh']
 // Veredicto -> etiqueta legible + color
 const VEREDICTOS = {
   OK:            { label: 'Lector OK',           tone: 'ok' },
+  FALTA_LECTOR:  { label: 'Falta enchufar lector', tone: 'wait' },
   SGIBIOSRV_OFF: { label: 'Servicio apagado',    tone: 'warn' },
   WEBAPI_HTTP:   { label: 'WebAPI HTTP (mal)',   tone: 'bad' },
   WEBAPI_CERT:   { label: 'Certificado faltante',tone: 'warn' },
@@ -21,6 +22,7 @@ const VEREDICTOS = {
 
 const tonos = {
   ok:   'bg-green-100 text-green-800 border-green-200',
+  wait: 'bg-sky-100 text-sky-800 border-sky-200',
   warn: 'bg-amber-100 text-amber-800 border-amber-200',
   bad:  'bg-red-100 text-red-800 border-red-200',
 }
@@ -132,7 +134,7 @@ export default function InstalacionesKiosco() {
                         </td>
                         <td className="px-4 py-3">
                           <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border text-xs font-semibold whitespace-nowrap ${tonos[v.tone]}`}>
-                            {v.tone === 'ok' ? <CheckCircle className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+                            {v.tone === 'ok' ? <CheckCircle className="w-3 h-3" /> : v.tone === 'wait' ? <Usb className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
                             {v.label}
                           </span>
                         </td>

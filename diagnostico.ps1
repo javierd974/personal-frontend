@@ -81,16 +81,20 @@ if ($p8443) {
 }
 
 # --- Veredicto --------------------------------------------------------------
-$readerOk = ($dev -ne $null -and $errCode -eq 0 -and $sgOk -and $webOk)
-if     ($readerOk)                    { $veredicto = 'OK';            $detalle = 'Lector reconocido y WebAPI HTTPS activo.' }
-elseif (-not $sgOk -and -not $p8443 -and -not $p8000) { $veredicto = 'SGIBIOSRV_OFF'; $detalle = 'El servicio sgibiosrv no esta corriendo. Abrir el kiosco lo inicia.' }
-elseif (-not $p8443 -and $p8000)      { $veredicto = 'WEBAPI_HTTP';   $detalle = 'Esta instalado el WebAPI HTTP (8000); la app usa HTTPS (8443). Reinstalar el WebAPI "over HTTPS" (SGI_BWAPI).' }
-elseif ($p8443 -and $certMal)         { $veredicto = 'WEBAPI_CERT';   $detalle = 'El WebAPI responde en 8443 pero el certificado no esta en la raiz de confianza. Reinstalar el certificado (paso [4/6] del instalador).' }
-elseif (-not $p8443)                  { $veredicto = 'WEBAPI_OFF';    $detalle = 'El WebAPI no esta escuchando en 8443. Verificar que el WebAPI "over HTTPS" este instalado y sgibiosrv corriendo.' }
-elseif ($dev -eq $null)               { $veredicto = 'NO_DETECTADO';  $detalle = 'Windows no ve el lector. Revisar USB/cable/puerto (probar USB 2.0 directo).' }
-elseif ($errCode -eq 28)              { $veredicto = 'SIN_DRIVER';    $detalle = 'Dispositivo sin driver (28). Actualizar controlador por Administrador de dispositivos apuntando a la carpeta drivers.' }
-elseif ($errCode -ne 0)               { $veredicto = 'DRIVER_ERROR';  $detalle = "Dispositivo con problema (errorCode $errCode)." }
-else                                  { $veredicto = 'REVISAR';       $detalle = "Dispositivo presente (driver=$driverSvc) pero el WebAPI no lo toma. Reiniciar sgibiosrv o reasignar el driver a SecuGen." }
+# NOTA: sgibiosrv (WebAPI "over HTTPS") solo levanta el puerto 8443 cuando hay un
+# lector conectado; sin lector responde en 8000. Por eso el estado del WebAPI solo
+# se juzga con el lector presente. Sin lector -> "falta enchufar el lector".
+$readerPresent = ($dev -ne $null)
+$readerOk = ($readerPresent -and $errCode -eq 0 -and $webOk)
+if     ($readerOk)               { $veredicto = 'OK';            $detalle = 'Lector reconocido y WebAPI HTTPS activo.' }
+elseif (-not $readerPresent)     { $veredicto = 'FALTA_LECTOR';  $detalle = 'Software instalado. Falta enchufar el lector SecuGen; con el lector puesto, corre diagnostico.bat para validar.' }
+elseif ($errCode -eq 28)         { $veredicto = 'SIN_DRIVER';    $detalle = 'Lector conectado pero sin driver (28). Actualizar el controlador apuntando a la carpeta drivers, o reconectar tras instalar.' }
+elseif ($errCode -ne 0)          { $veredicto = 'DRIVER_ERROR';  $detalle = "Lector con problema de driver (errorCode $errCode). Reasignar el driver a SecuGen." }
+elseif (-not $sgOk)              { $veredicto = 'SGIBIOSRV_OFF'; $detalle = 'El servicio sgibiosrv no esta corriendo. Abrir el kiosco lo inicia.' }
+elseif ($p8443 -and $certMal)    { $veredicto = 'WEBAPI_CERT';   $detalle = 'El WebAPI responde en 8443 pero el certificado no esta en la raiz de confianza. Reinstalar el certificado.' }
+elseif (-not $p8443 -and $p8000) { $veredicto = 'WEBAPI_HTTP';   $detalle = 'Con el lector puesto, el WebAPI responde en HTTP (8000) y no en 8443. Reabrir el kiosco; si persiste, reinstalar el WebAPI "over HTTPS".' }
+elseif (-not $p8443)             { $veredicto = 'WEBAPI_OFF';    $detalle = 'El WebAPI no escucha en 8443. Reabrir el kiosco (inicia sgibiosrv) o reinstalar el WebAPI.' }
+else                             { $veredicto = 'REVISAR';       $detalle = "Lector presente (driver=$driverSvc) pero el WebAPI no responde bien en 8443." }
 
 # --- Log --------------------------------------------------------------------
 if (-not (Test-Path $INSTALL_DIR)) { New-Item -ItemType Directory -Path $INSTALL_DIR | Out-Null }
@@ -104,6 +108,11 @@ if ($readerOk) {
   Write-Host ("   LECTOR OK" + $(if ($LocalNombre) { " - $LocalNombre" } else { '' })) -ForegroundColor Green
   Write-Host '   El kiosco esta listo para usar en esta maquina.' -ForegroundColor Green
   Write-Host '  ============================================================' -ForegroundColor Green
+} elseif ($veredicto -eq 'FALTA_LECTOR') {
+  Write-Host '  ============================================================' -ForegroundColor Cyan
+  Write-Host '   SOFTWARE OK - FALTA ENCHUFAR EL LECTOR' -ForegroundColor Cyan
+  Write-Host '   Enchufa el lector y corre diagnostico.bat para validar.' -ForegroundColor Cyan
+  Write-Host '  ============================================================' -ForegroundColor Cyan
 } else {
   Write-Host '  ============================================================' -ForegroundColor Yellow
   Write-Host "   FALTA REVISAR:  $veredicto" -ForegroundColor Yellow
