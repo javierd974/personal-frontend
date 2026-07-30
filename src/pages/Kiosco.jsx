@@ -208,7 +208,13 @@ export default function Kiosco() {
       .select('*, rol:roles(nombre)')
       .single()
     if (error) {
-      return finLectura(ESTADOS.ERROR, { empleado: emp, mensaje: error.message }, ERROR_HOLD_MS, token)
+      // 23505 = índice único (uq_registro_abierto_empleado_dia) o el trigger
+      // validar_entrada_unica: ya hay un turno abierto (carrera entre dispositivos).
+      const yaAbierto = error.code === '23505' || /turno abierto/i.test(error.message || '')
+      const mensaje = yaAbierto
+        ? `${emp.nombre} ya tiene un turno abierto. Volvé a apoyar el dedo para registrar la salida.`
+        : error.message
+      return finLectura(ESTADOS.ERROR, { empleado: emp, mensaje }, ERROR_HOLD_MS, token)
     }
     return finLectura(ESTADOS.EXITO, { empleado: emp, accion: ACCION.ENTRADA, registro: data }, COOLDOWN_MS, token)
   }
