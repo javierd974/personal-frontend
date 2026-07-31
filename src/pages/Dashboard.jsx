@@ -16,7 +16,8 @@ import {
   MapPin,
   History,
   Fingerprint,
-  Monitor
+  Monitor,
+  ShieldAlert
 } from 'lucide-react'
 import { authService } from '../services/authService'
 import { localesService } from '../services/catalogosService'
@@ -286,6 +287,15 @@ const Dashboard = () => {
                 <Monitor className="w-5 h-5" />
               </button>
             )}
+            {puedeVerInstalaciones && (
+              <button
+                onClick={() => navigate('/control-registros')}
+                className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                title="Control de registros manuales"
+              >
+                <ShieldAlert className="w-5 h-5" />
+              </button>
+            )}
             {usuario?.rol === 'admin' && (
               <button
                 onClick={() => navigate('/admin')}
@@ -453,6 +463,15 @@ const Dashboard = () => {
                   title="Instalación de kioscos"
                 >
                   <Monitor className="w-5 h-5" />
+                </button>
+              )}
+              {puedeVerInstalaciones && (
+                <button
+                  onClick={() => navigate('/control-registros')}
+                  className="p-2 text-gray-600 hover:text-primary hover:bg-gray-100 rounded-lg transition-colors"
+                  title="Control de registros manuales"
+                >
+                  <ShieldAlert className="w-5 h-5" />
                 </button>
               )}
               {usuario?.rol === 'admin' && (

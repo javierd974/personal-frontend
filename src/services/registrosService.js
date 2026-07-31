@@ -285,6 +285,20 @@ export const registrosService = {
     }
   },
 
+  // Control anti-abuso: registros MANUALES con IP/dispositivo del que los cargó
+  // (solo admin/rrhh, por la RPC). soloSospechosos = manual desde celular.
+  async getControlRegistros(desde = null, soloSospechosos = false) {
+    try {
+      const params = { p_solo_sospechosos: soloSospechosos }
+      if (desde) params.p_desde = desde
+      const { data, error } = await supabase.rpc('control_registros', params)
+      if (error) throw error
+      return { success: true, data }
+    } catch (error) {
+      return { success: false, error: handleSupabaseError(error) }
+    }
+  },
+
   // Verificar si un empleado puede registrar entrada
   async puedeRegistrarEntrada(empleadoId) {
     try {
