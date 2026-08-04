@@ -152,8 +152,26 @@ export default function Kiosco() {
       return finLectura(ESTADOS.ERROR, { mensaje: 'No hay huellas registradas en el sistema. Consultá al encargado.' }, ERROR_HOLD_MS, token)
     }
     const match = await biometricoService.identificarEmpleado(template, huellasResult.data)
+
+    // Logging para calibrar UMBRAL_MATCHING / MARGEN_MINIMO con datos reales.
+    // No bloquea el fichaje (corre sin await, y falla en silencio).
+    biometricoService.registrarLectura({
+      localId: lid,
+      empleadoId: match.encontrado ? match.empleado_id : null,
+      score: match.score,
+      margen: match.margen,
+      motivo: match.encontrado ? 'ok' : (match.motivo || 'no_encontrado'),
+      candidatos: huellasResult.data.length
+    })
+
     if (!match.encontrado) {
-      return finLectura(ESTADOS.SIN_HUELLA, { mensaje: 'Huella no reconocida. Consultá al encargado.' }, ERROR_HOLD_MS, token)
+      // 'ambiguo' = dos empleados puntuaron parecido. Antes esto registraba
+      // al primero del array y producia fichajes cruzados; ahora se pide
+      // reintentar en vez de arriesgar la identidad equivocada.
+      const msg = match.motivo === 'ambiguo'
+        ? 'No pudimos identificarte con seguridad. Apoyá el dedo de nuevo, bien centrado.'
+        : 'Huella no reconocida. Consultá al encargado.'
+      return finLectura(ESTADOS.SIN_HUELLA, { mensaje: msg }, ERROR_HOLD_MS, token)
     }
 
     // 2. Datos del empleado (incluye su rol por defecto)

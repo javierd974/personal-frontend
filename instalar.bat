@@ -64,9 +64,34 @@ if exist "%DRIVERS_DIR%\WinDrivers_v3001_Installer.zip" (
     for /r "!DRIVER_TEMP!" %%f in (%DRIVER_MSI%) do set MSIPATH=%%f
     if defined MSIPATH (
         msiexec /i "!MSIPATH!" /qn /norestart
-        :: Forzar binding del driver (Win10/11 reasigna el device a SecuGen; en Win7 se ignora)
-        pnputil /add-driver "!DRIVER_TEMP!\*.inf" /subdirs /install >nul 2>&1
-        echo        Driver instalado.
+
+        :: Registrar los INF en el almacen de drivers de Windows.
+        :: OJO: los INF NO estan sueltos en el zip (ahi solo hay MSI + PDF);
+        :: estan DENTRO del MSI. Por eso hay que hacer una instalacion
+        :: administrativa (msiexec /a) que los extrae, y recien ahi correr
+        :: pnputil. Sin esto el lector queda con error 28 (CM_PROB_FAILED_INSTALL):
+        :: los archivos se copian pero ningun driver queda registrado.
+        set DRIVER_ADMIN=%TEMP%\SecuGenDriverAdmin
+        if exist "!DRIVER_ADMIN!" rmdir /s /q "!DRIVER_ADMIN!"
+        echo        Extrayendo los INF del MSI...
+        msiexec /a "!MSIPATH!" /qn TARGETDIR="!DRIVER_ADMIN!"
+        ping -n 21 127.0.0.1 >nul
+
+        set INFCOUNT=0
+        for /r "!DRIVER_ADMIN!" %%f in (*.inf) do (
+            pnputil /add-driver "%%f" /install >nul 2>&1
+            set /a INFCOUNT+=1
+        )
+        pnputil /scan-devices >nul 2>&1
+
+        if !INFCOUNT! GTR 0 (
+            echo        Driver instalado - !INFCOUNT! INF registrados en el almacen.
+        ) else (
+            echo        [ERROR] No se extrajo ningun INF del MSI. El lector va a
+            echo        quedar con error 28. Correr "reparar_driver.bat".
+            set /a ERRORES+=1
+        )
+        rmdir /s /q "!DRIVER_ADMIN!" 2>nul
     ) else (
         echo        [ERROR] No se encontro %DRIVER_MSI% dentro del zip.
         set /a ERRORES+=1
@@ -80,23 +105,77 @@ echo.
 
 :: -- PASO 2: WebAPI SecuGen ---------------------------------------------------
 echo  [3/6] Instalando SecuGen WebAPI (%BWAPI_FILE%)...
-echo        NOTA: puede abrirse una ventana del asistente. Segui los pasos y,
-echo        si aparece un error de "close applications", elegi
-echo        "Ignore the error and continue".
-if exist "%DRIVERS_DIR%\%BWAPI_FILE%" (
-    start /wait "" "%DRIVERS_DIR%\%BWAPI_FILE%"
-    if exist "C:\Program Files\SecuGen\SgiBioSrv\sgibiosrv.exe" (
-        echo        WebAPI instalado [64bit].
-    ) else if exist "C:\Program Files (x86)\SecuGen\SgiBioSrv\sgibiosrv.exe" (
-        echo        WebAPI instalado [32bit].
-    ) else (
-        echo        [ADVERTENCIA] No se detecto sgibiosrv tras la instalacion.
-        set /a ERRORES+=1
-    )
-) else (
+if not exist "%DRIVERS_DIR%\%BWAPI_FILE%" (
     echo        [ERROR] Falta drivers\%BWAPI_FILE%
     set /a ERRORES+=1
+    goto :FIN_WEBAPI
 )
+
+:: IMPORTANTE: si el servicio "SecuGen Web API Service" ya esta corriendo, el
+:: asistente muestra la pantalla "The following applications are using files
+:: that need to be updated by Setup". Aunque se elija cerrar las aplicaciones,
+:: el servicio queda sin re-registrar y la instalacion termina a medias (el
+:: kiosco no reconoce el lector). Por eso lo bajamos ANTES de correr el setup.
+echo        Cerrando servicio/proceso previo de SecuGen ^(si existe^)...
+powershell -NoProfile -Command "Get-Service | Where-Object { $_.DisplayName -match 'SecuGen' -or $_.Name -match 'sgibio|secugen' } | ForEach-Object { Stop-Service -Name $_.Name -Force -ErrorAction SilentlyContinue }" >nul 2>&1
+sc stop SgiBioSrv >nul 2>&1
+taskkill /F /IM sgibiosrv.exe >nul 2>&1
+ping -n 4 127.0.0.1 >nul
+
+echo        Ejecutando el asistente del WebAPI...
+start /wait "" "%DRIVERS_DIR%\%BWAPI_FILE%" /SP- /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS
+
+set "SGDIR="
+if exist "C:\Program Files\SecuGen\SgiBioSrv\sgibiosrv.exe" set "SGDIR=C:\Program Files\SecuGen\SgiBioSrv"
+if exist "C:\Program Files (x86)\SecuGen\SgiBioSrv\sgibiosrv.exe" set "SGDIR=C:\Program Files (x86)\SecuGen\SgiBioSrv"
+
+if not defined SGDIR (
+    echo        [AVISO] La instalacion quedo incompleta. Desinstalando version
+    echo        previa y reintentando una sola vez...
+    for %%D in ("C:\Program Files\SecuGen\SgiBioSrv" "C:\Program Files (x86)\SecuGen\SgiBioSrv") do (
+        if exist "%%~D\unins000.exe" start /wait "" "%%~D\unins000.exe" /VERYSILENT /NORESTART
+    )
+    taskkill /F /IM sgibiosrv.exe >nul 2>&1
+    ping -n 6 127.0.0.1 >nul
+    start /wait "" "%DRIVERS_DIR%\%BWAPI_FILE%" /SP- /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS
+    if exist "C:\Program Files\SecuGen\SgiBioSrv\sgibiosrv.exe" set "SGDIR=C:\Program Files\SecuGen\SgiBioSrv"
+    if exist "C:\Program Files (x86)\SecuGen\SgiBioSrv\sgibiosrv.exe" set "SGDIR=C:\Program Files (x86)\SecuGen\SgiBioSrv"
+)
+
+if defined SGDIR (
+    echo        WebAPI instalado en !SGDIR!
+) else (
+    echo        [ADVERTENCIA] No se detecto sgibiosrv tras la instalacion.
+    echo        Correr "reparar_webapi.bat" como administrador y reintentar.
+    set /a ERRORES+=1
+    goto :FIN_WEBAPI
+)
+
+:: -- Garantizar que el WebAPI arranque solo despues de un reinicio ------------
+:: En varias instalaciones el setup dejo los archivos pero NO registro ningun
+:: servicio: sgibiosrv quedaba corriendo suelto (lo levantaba diagnostico.ps1)
+:: y al reiniciar la PC el kiosco se quedaba sin lector. Si no hay servicio,
+:: creamos una tarea programada al inicio de sesion.
+set SVC_OK=0
+for /f %%s in ('powershell -NoProfile -Command "@(Get-Service ^| Where-Object { $_.DisplayName -match 'SecuGen' -or $_.Name -match 'sgibio' }).Count" 2^>nul') do set SVC_OK=%%s
+
+if "!SVC_OK!"=="0" (
+    echo        Sin servicio registrado - creando tarea de arranque automatico...
+    schtasks /create /tn "SmartDom-SgiBioSrv" /tr "\"!SGDIR!\sgibiosrv.exe\" -s -p:8443" /sc onlogon /rl highest /f >nul 2>&1
+    if errorlevel 1 (
+        echo        [ADVERTENCIA] No se pudo crear la tarea de arranque.
+        set /a ERRORES+=1
+    ) else (
+        echo        Tarea "SmartDom-SgiBioSrv" creada ^(arranca al iniciar sesion^).
+    )
+) else (
+    echo        Servicio de SecuGen registrado correctamente.
+)
+
+:: Dejarlo corriendo ya mismo, sin esperar al proximo reinicio.
+:: OJO: sin los argumentos -s -p:8443 arranca en HTTP 8000 y la app no lo alcanza.
+tasklist /FI "IMAGENAME eq sgibiosrv.exe" 2>nul | find /i "sgibiosrv.exe" >nul || start "" /D "!SGDIR!" "!SGDIR!\sgibiosrv.exe" -s -p:8443
+:FIN_WEBAPI
 echo.
 
 :: -- PASO 3: Certificado ------------------------------------------------------

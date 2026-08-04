@@ -1,0 +1,161 @@
+<style>
+  :root{
+    --ink:#22303d;        /* slate, de la familia #2D3E50 */
+    --muted:#5d6f7d;
+    --faint:#8496a3;
+    --hair:#d6e0e7;
+    --panel:#eef4f8;      /* cool, sesgado al azul de marca */
+    --panel2:#f6fafc;
+    --blue:#0B9FD9;       /* primary SmartDom */
+    --deep:#2D3E50;       /* dark SmartDom */
+    --orange:#F59120;     /* secondary SmartDom */
+    --paper:#ffffff;
+    --backdrop:#dde5ea;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--backdrop);
+    font-family:-apple-system,"Segoe UI",Roboto,system-ui,sans-serif;
+    color:var(--ink);-webkit-font-smoothing:antialiased;
+    line-height:1.45;padding:24px;}
+  .sheet{background:var(--paper);width:210mm;min-height:297mm;margin:0 auto;
+    padding:15mm 15mm 12mm;box-shadow:0 6px 30px rgba(45,62,80,.18);
+    display:flex;flex-direction:column;gap:7mm;}
+
+  /* Header */
+  .eyebrow{font-size:10px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--blue);font-weight:700;}
+  h1{font-size:26px;line-height:1.08;margin:4px 0 0;font-weight:800;
+    letter-spacing:-.01em;text-wrap:balance;color:var(--deep);}
+  .lede{font-size:12px;color:var(--muted);margin:5px 0 0;max-width:62ch;}
+  .head-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;}
+  .urlchip{flex-shrink:0;font-size:11px;background:var(--deep);color:#fff;
+    padding:7px 12px;border-radius:8px;font-weight:600;text-align:center;line-height:1.35;}
+  .urlchip small{display:block;font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;
+    color:#9fc7db;font-weight:700;margin-bottom:2px;}
+  .rule{height:2px;background:linear-gradient(90deg,var(--blue),var(--orange) 65%,transparent);
+    border:0;margin:2px 0 0;border-radius:2px;}
+
+  /* Requisitos strip */
+  .reqs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+  .req{background:var(--panel);border:1px solid var(--hair);border-radius:9px;
+    padding:9px 11px;}
+  .req .k{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);
+    font-weight:700;}
+  .req .v{font-size:11.5px;color:var(--ink);font-weight:600;margin-top:2px;line-height:1.25;}
+
+  /* Cuerpo dos columnas */
+  .body{display:grid;grid-template-columns:1.32fr 1fr;gap:9mm;align-items:start;}
+  .sec-label{font-size:10px;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--faint);font-weight:700;margin:0 0 9px;}
+
+  ol.steps{list-style:none;margin:0;padding:0;counter-reset:s;
+    display:flex;flex-direction:column;gap:11px;}
+  ol.steps li{counter-increment:s;position:relative;padding-left:34px;font-size:12.5px;}
+  ol.steps li::before{content:counter(s);position:absolute;left:0;top:-1px;
+    width:23px;height:23px;border-radius:50%;background:var(--blue);color:#fff;
+    font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;}
+  ol.steps b{color:var(--deep);}
+  code{font-family:"Cascadia Code",Consolas,ui-monospace,monospace;
+    font-size:11px;background:var(--panel);border:1px solid var(--hair);
+    padding:1px 5px;border-radius:5px;color:var(--deep);white-space:nowrap;}
+
+  .callout{margin-top:12px;border-left:3px solid var(--orange);
+    background:#fff7ed;border-radius:0 8px 8px 0;padding:9px 12px;font-size:11px;color:#7a4a12;}
+  .callout b{color:#b45309;}
+  .tip{margin-top:9px;font-size:11px;color:var(--muted);}
+  .tip b{color:var(--ink);}
+
+  /* Tabla locales */
+  .locals{background:var(--panel2);border:1px solid var(--hair);border-radius:10px;
+    overflow:hidden;}
+  .locals .cap{font-size:11px;font-weight:700;color:var(--deep);
+    padding:8px 11px;background:var(--panel);border-bottom:1px solid var(--hair);}
+  table{width:100%;border-collapse:collapse;font-size:10px;}
+  td{padding:3.5px 11px;border-bottom:1px solid #e7eef3;}
+  tr:last-child td{border-bottom:0}
+  td.n{font-weight:700;color:var(--ink);white-space:nowrap;width:1%;}
+  td.u{font-family:"Cascadia Code",Consolas,ui-monospace,monospace;color:var(--muted);
+    font-variant-numeric:tabular-nums;text-align:right;letter-spacing:-.2px;}
+
+  footer{margin-top:auto;padding-top:8px;border-top:1px solid var(--hair);
+    display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--faint);}
+  footer b{color:var(--deep);}
+
+  @page{size:A4;margin:0;}
+  @media print{
+    body{background:#fff;padding:0;}
+    .sheet{box-shadow:none;width:auto;min-height:auto;margin:0;padding:14mm 14mm 10mm;}
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  }
+</style>
+
+<div class="sheet">
+
+  <header>
+    <div class="head-top">
+      <div>
+        <div class="eyebrow">Los Notables · SmartDom</div>
+        <h1>Instalación del Kiosco Biométrico</h1>
+        <p class="lede">Guía para configurar el lector de huellas en la PC de un local. El kiosco abre la app en la nube; esta PC solo necesita el lector, su servicio y Chrome.</p>
+      </div>
+      <div class="urlchip"><small>App</small>personal.losnotables.cloud</div>
+    </div>
+    <hr class="rule">
+  </header>
+
+  <section class="reqs">
+    <div class="req"><div class="k">Sistema</div><div class="v">Windows 7 · 8 · 10 · 11</div></div>
+    <div class="req"><div class="k">Navegador</div><div class="v">Google Chrome<br><span style="font-weight:400;color:var(--faint);font-size:10px">Win7: versión 109</span></div></div>
+    <div class="req"><div class="k">Lector</div><div class="v">SecuGen por USB</div></div>
+    <div class="req"><div class="k">Red</div><div class="v">Conexión a internet</div></div>
+  </section>
+
+  <div class="body">
+
+    <div>
+      <p class="sec-label">Pasos</p>
+      <ol class="steps">
+        <li>Conectá el <b>lector SecuGen</b> por USB y copiá la carpeta del instalador a la PC (por ejemplo, al Escritorio).</li>
+        <li>Clic derecho en <code>instalar.bat</code> → <b>Ejecutar como administrador</b>.</li>
+        <li>Si el asistente del WebAPI muestra un error de <i>“close applications”</i>, elegí <b>Ignore the error and continue</b> hasta llegar a <b>Finish</b>.</li>
+        <li>Cuando lo pida, ingresá el <b>número del local</b> de esta PC (lista de la derecha).</li>
+        <li>Doble clic en el icono <b>“SmartDom Kiosco”</b> del escritorio. Apoyá el dedo y usá <b>ENTRADA</b> / <b>SALIDA</b>.</li>
+      </ol>
+
+      <div class="callout"><b>Importante:</b> el asistente de SecuGen puede abrir una ventana; es normal. Seguí los pasos y usá “Ignore the error and continue” si aparece.</div>
+
+      <p class="tip"><b>Salir del modo pantalla completa:</b> Alt + F4.</p>
+      <p class="tip"><b>¿Elegiste mal el local?</b> Editá <code>C:\SmartDomKiosco\kiosco.bat</code> y corregí la línea <code>set LOCAL_ID=</code> con el UUID correcto.</p>
+    </div>
+
+    <div class="locals">
+      <div class="cap">Elegí tu local (número / UUID)</div>
+      <table>
+        <tbody>
+          <tr><td class="n">1 · Cao</td><td class="u">f2c46927-4759-40fe-8b32-f8df08a3a90f</td></tr>
+          <tr><td class="n">2 · Celta</td><td class="u">61f1a919-4f85-4da8-9f81-71a2835e41ef</td></tr>
+          <tr><td class="n">3 · Cortázar</td><td class="u">9ab2f3c0-b05e-43cc-8c19-d9cbbf93c1fe</td></tr>
+          <tr><td class="n">4 · Depósito</td><td class="u">df218cef-def2-4f69-bc3b-64b06b6fd200</td></tr>
+          <tr><td class="n">5 · Dorrego</td><td class="u">543a91dc-3f00-4d02-866a-5fed9e02b089</td></tr>
+          <tr><td class="n">6 · El Octavo</td><td class="u">f31f650a-1f20-421f-8233-f32008ea1c18</td></tr>
+          <tr><td class="n">7 · Federal</td><td class="u">efa521ad-b5fd-44e4-809b-2a8f48e747a8</td></tr>
+          <tr><td class="n">8 · Hipopótamo</td><td class="u">bda52bba-5fb7-4a5e-897f-8d37eb8f52f2</td></tr>
+          <tr><td class="n">9 · Lavalle</td><td class="u">ad179865-e087-4a67-b923-1f9713c842d6</td></tr>
+          <tr><td class="n">10 · Margot</td><td class="u">f23f85f1-f741-4ce7-9c72-9ab995aa12d6</td></tr>
+          <tr><td class="n">11 · Miramar</td><td class="u">399e8bd2-b1ad-44b7-b0e6-c793ba323068</td></tr>
+          <tr><td class="n">12 · Oficina</td><td class="u">c18343eb-acf8-4aa1-abe7-c4674c25f8a8</td></tr>
+          <tr><td class="n">13 · Pastelería</td><td class="u">c3da51f5-e1e8-40fd-83fb-36cee9576e2b</td></tr>
+          <tr><td class="n">14 · Poesía</td><td class="u">2d9ee9f4-894b-415a-9180-3ad0605909ec</td></tr>
+          <tr><td class="n">15 · Zarpada</td><td class="u">f34b617c-33e4-4e83-9d25-f0c114837881</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <footer>
+    <span>Requiere el lector conectado y el servicio <b>SgiBioSrv</b> activo (se inicia solo al abrir el kiosco).</span>
+    <span>Soporte: <b>SmartDom</b> · smartdom.io</span>
+  </footer>
+
+</div>

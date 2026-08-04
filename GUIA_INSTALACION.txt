@@ -1,0 +1,88 @@
+SMARTDOM KIOSCO - GUIA DE INSTALACION
+=====================================
+Actualizada con los problemas reales encontrados en Hipopotamo,
+Dorrego y Federal.
+
+
+ANTES DE EMPEZAR - anotar estos 3 datos
+---------------------------------------
+  [ ] Nombre del local y su LOCAL_ID
+  [ ] Version de Windows  (winver)
+  [ ] Modelo del lector    (etiqueta abajo del lector)
+
+Si la PC es WINDOWS 7 -> leer al final "CASO WINDOWS 7" ANTES de instalar.
+
+
+INSTALACION NORMAL (Windows 10 / 11)
+------------------------------------
+  1. Copiar esta carpeta al Escritorio de la PC del local.
+     NO ejecutar desde el pendrive.
+
+  2. Enchufar el lector en un USB TRASERO directo (sin hub ni alargue).
+
+  3. Clic derecho en "instalar.bat" -> Ejecutar como administrador.
+
+  4. Al terminar debe decir "TODO OK". Si dice ERROR o ADVERTENCIA,
+     leer que paso fallo y ver la tabla de abajo.
+
+  5. Reiniciar la PC. Esperar a que arranque sola y verificar que el
+     kiosco levante SIN que nadie corra nada. Este paso NO se saltea:
+     es el unico que prueba que sobrevive un corte de luz.
+
+  6. Abrir el kiosco y fichar una vez con tu propio dedo.
+
+
+SI ALGO FALLA - que script correr
+---------------------------------
+  El lector aparece con triangulo amarillo / error 28
+      -> reparar_driver.bat        (como administrador)
+
+  La app dice "Servicio biometrico no activo"
+  o el kiosco no reacciona
+      -> diagnostico.bat           (como administrador)
+      -> si sigue: reparar_webapi.bat
+
+  El asistente del WebAPI muestra "applications are using files
+  that need to be updated"
+      -> cancelar y correr reparar_webapi.bat
+
+  Todo parece bien pero la app no conecta
+      -> verificar que sgibiosrv escuche en 8443 y NO en 8000:
+         netstat -ano | findstr ":8443"
+         Si esta en 8000, se lanzo sin los argumentos -s -p:8443
+
+
+ENROLAMIENTO DE HUELLAS
+-----------------------
+  - Cada dedo se toma 3 VECES. Decirle a la persona que LEVANTE el
+    dedo entre toma y toma; si lo deja apoyado, las 3 son iguales y
+    no sirve de nada.
+  - Apoyar con firmeza, centrado, cubriendo bien el sensor.
+  - Dedo seco o sucio = calidad baja. Que se lo limpie o se lo
+    humedezca un poco.
+  - Registrar 2 DEDOS por persona (indice y pulgar del mismo lado).
+  - Si avisa "calidad baja", volver a intentar antes de guardar.
+    Guardar una huella mala hoy = una persona que no puede fichar
+    todos los dias.
+  - ANOTAR los valores de calidad de las primeras 10 personas.
+
+
+CASO WINDOWS 7
+--------------
+  Windows 7 de fabrica NO puede usar el lector UPx-AP: le falta el
+  framework UMDF 1.11. El driver no va a instalar por mas que se
+  corran los scripts.
+
+  Verificar:
+    (Get-Item "$env:SystemRoot\System32\WUDFPlatform.dll").VersionInfo.FileVersion
+
+    6.1.7600.xxxx -> FALTA la actualizacion. Instalar KB2685813
+                     (version x86) desde el Catalogo de Microsoft
+                     Update, reiniciar, y recien despues instalar.
+    6.1.7601.xxxx -> OK, seguir normal.
+
+  Sintoma tipico si falta: el kiosco abre y se cierra a los pocos
+  segundos, con un error de sgibiosrv.exe.
+
+
+SOPORTE: SmartDom - smartdom.io

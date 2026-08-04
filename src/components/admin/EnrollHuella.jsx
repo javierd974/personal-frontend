@@ -10,12 +10,19 @@ const DEDOS = [
   { id: 'medio_derecho',    label: 'Medio derecho',    recomendado: false },
 ]
 
+// Enrolamiento de calidad: se toma el mismo dedo TOMAS veces y se guarda la
+// captura mas estable. CALIDAD_MINIMA es el score promedio por debajo del cual
+// avisamos que la huella probablemente falle al fichar.
+const TOMAS = 3
+const CALIDAD_MINIMA = 120
+
 const EnrollHuella = ({ empleado, onAlert, onClose }) => {
   const [servicioActivo, setServicioActivo]       = useState(null)
   const [huellasRegistradas, setHuellasRegistradas] = useState([])
   const [dedoSeleccionado, setDedoSeleccionado]   = useState('indice_derecho')
   const [estado, setEstado]                        = useState('idle')
   const [mensajeEstado, setMensajeEstado]          = useState('')
+  const [progreso, setProgreso]                    = useState(null)
   const [loading, setLoading]                      = useState(false)
 
   useEffect(() => { verificarServicioYHuellas() }, [empleado.id])
@@ -32,20 +39,53 @@ const EnrollHuella = ({ empleado, onAlert, onClose }) => {
 
   const handleCapturar = async () => {
     setEstado('capturando')
+    setProgreso({ paso: 0, total: TOMAS })
     setMensajeEstado('Apoyá el dedo en el lector...')
-    const resultado = await biometricoService.capturarHuella(15000)
+
+    // 3 tomas del MISMO dedo: se guarda la mas estable de las tres.
+    // Una sola toma puede salir torcida o con el dedo seco y deja un
+    // template pobre que despues nunca matchea bien.
+    const resultado = await biometricoService.capturarHuellaCalidad({
+      tomas: TOMAS,
+      timeoutMs: 15000,
+      onProgreso: (paso, total, msg) => {
+        setProgreso({ paso, total })
+        setMensajeEstado(msg)
+      }
+    })
+
     if (!resultado.success) {
-      setEstado('error'); setMensajeEstado(resultado.error)
-      setTimeout(() => setEstado('idle'), 3000)
+      setEstado('error')
+      setMensajeEstado(`${resultado.error} (falló la toma ${resultado.tomaFallida} de ${TOMAS})`)
+      setProgreso(null)
+      setTimeout(() => setEstado('idle'), 3500)
       return
     }
-    setEstado('guardando'); setMensajeEstado('Guardando huella...')
+
+    // Calidad baja = las 3 tomas no se parecen entre si. Se puede guardar
+    // igual, pero conviene avisar para reintentar o usar otro dedo.
+    if (resultado.calidad < CALIDAD_MINIMA) {
+      const seguir = window.confirm(
+        `La huella quedó de calidad baja (${resultado.calidad}).\n\n` +
+        `Esto suele pasar si el dedo está seco, sucio o se apoyó distinto en cada toma. ` +
+        `Si la guardás así, es probable que después falle al fichar.\n\n` +
+        `¿Guardar igual? (Cancelar = volver a intentar)`
+      )
+      if (!seguir) {
+        setEstado('idle'); setProgreso(null); setMensajeEstado('')
+        return
+      }
+    }
+
+    setEstado('guardando'); setProgreso(null); setMensajeEstado('Guardando huella...')
     const guardado = await biometricoService.enrolarHuella(empleado.id, dedoSeleccionado, resultado.template)
     if (guardado.success) {
-      setEstado('ok'); setMensajeEstado('¡Huella registrada correctamente!')
-      onAlert({ type: 'success', message: `Huella de ${DEDOS.find(d => d.id === dedoSeleccionado)?.label} registrada` })
+      biometricoService.invalidarCache()   // el kiosco debe ver la huella nueva
+      setEstado('ok')
+      setMensajeEstado(`¡Huella registrada! (calidad ${resultado.calidad})`)
+      onAlert({ type: 'success', message: `Huella de ${DEDOS.find(d => d.id === dedoSeleccionado)?.label} registrada — calidad ${resultado.calidad}` })
       await verificarServicioYHuellas()
-      setTimeout(() => setEstado('idle'), 2000)
+      setTimeout(() => setEstado('idle'), 2500)
     } else {
       setEstado('error'); setMensajeEstado('Error al guardar: ' + guardado.error)
     }
@@ -165,15 +205,31 @@ const EnrollHuella = ({ empleado, onAlert, onClose }) => {
           {estado === 'error' && <XCircle className="w-6 h-6" />}
           {estado === 'idle' && <Fingerprint className="w-6 h-6" />}
           <span>
-            {estado === 'idle' && 'Capturar huella'}
-            {estado === 'capturando' && 'Esperando dedo...'}
+            {estado === 'idle' && `Capturar huella (${TOMAS} tomas)`}
+            {estado === 'capturando' && (progreso ? `Toma ${progreso.paso} de ${progreso.total}...` : 'Esperando dedo...')}
             {estado === 'guardando' && 'Guardando...'}
             {estado === 'ok' && '¡Registrada!'}
             {estado === 'error' && mensajeEstado}
           </span>
         </button>
+
         {estado === 'capturando' && (
-          <p className="text-center text-sm text-gray-500 mt-2 animate-pulse">Apoyá el dedo con firmeza en el centro del lector</p>
+          <div className="mt-3 space-y-2">
+            <div className="flex gap-1.5 justify-center">
+              {Array.from({ length: TOMAS }).map((_, i) => (
+                <div key={i}
+                  className={`h-2 flex-1 max-w-16 rounded-full transition-colors ${
+                    progreso && i < progreso.paso ? 'bg-primary' : 'bg-gray-200'
+                  }`} />
+              ))}
+            </div>
+            <p className="text-center text-sm font-medium text-primary animate-pulse">
+              {mensajeEstado}
+            </p>
+            <p className="text-center text-xs text-gray-500">
+              Importante: levantá el dedo entre toma y toma, y apoyalo siempre con firmeza en el centro.
+            </p>
+          </div>
         )}
       </div>
 

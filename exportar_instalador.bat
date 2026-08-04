@@ -28,6 +28,10 @@ copy /Y "%SRC%\kiosco.bat" "%DEST%\" >nul
 copy /Y "%SRC%\crear_acceso_directo.ps1" "%DEST%\" >nul
 copy /Y "%SRC%\diagnostico.ps1" "%DEST%\" >nul
 copy /Y "%SRC%\diagnostico.bat" "%DEST%\" >nul
+copy /Y "%SRC%\reparar_webapi.bat" "%DEST%\" >nul
+copy /Y "%SRC%\reparar_driver.bat" "%DEST%\" >nul
+copy /Y "%SRC%\GUIA_INSTALACION.txt" "%DEST%\" >nul
+copy /Y "%SRC%\GUIA_IMPRIMIBLE.html" "%DEST%\" >nul
 
 :: Crear guia
 echo  Creando guia...
@@ -36,6 +40,8 @@ echo SMARTDOM KIOSCO - GUIA RAPIDA DE INSTALACION
 echo =============================================
 echo.
 echo QUE HACE ESTE INSTALADOR:
+echo   - Instala el Visual C++ Runtime ^(necesario en Windows 7 y equipos sin
+echo     actualizar; sin el, sgibiosrv no arranca^)
 echo   - Instala el driver del lector SecuGen
 echo   - Instala el WebAPI de SecuGen ^(servicio local sgibiosrv, https://localhost:8443^)
 echo   - Instala el certificado en Windows
@@ -52,8 +58,10 @@ echo PASOS:
 echo   1. Copiar esta carpeta a la PC ^(por ejemplo al Escritorio^).
 echo   2. Clic derecho en "instalar.bat" -^> "Ejecutar como administrador".
 echo   3. Cuando lo pida, elegir el NUMERO del local de esta PC.
-echo   4. Si el asistente del WebAPI muestra un error de "close applications",
-echo      elegir "Ignore the error and continue".
+echo   4. Si el asistente del WebAPI igual muestra la pantalla "applications
+echo      are using files that need to be updated", cancelar el asistente y
+echo      correr "reparar_webapi.bat" como administrador ^(limpia la instalacion
+echo      previa y reinstala el WebAPI de cero^).
 echo   5. Al terminar, doble clic en el icono "SmartDom Kiosco".
 echo      ^(Para salir del modo pantalla completa: Alt+F4^)
 echo.
@@ -76,6 +84,12 @@ echo     Oficina:    c18343eb-acf8-4aa1-abe7-c4674c25f8a8
 echo     Pasteleria: c3da51f5-e1e8-40fd-83fb-36cee9576e2b
 echo     Poesia:     2d9ee9f4-894b-415a-9180-3ad0605909ec
 echo     Zarpada:    f34b617c-33e4-4e83-9d25-f0c114837881
+echo.
+echo NOTA - Windows 7 de 32 bits con instalacion previa de SecuGen:
+echo   Si el WebAPI da error 216 ^("no es compatible con la version de Windows"^),
+echo   hay binarios viejos de 64-bit trabados. Cerrar sgibiosrv.exe ^(Ctrl+Shift+Esc^),
+echo   desinstalar "SecuGen WebAPI over HTTPS", borrar C:\Program Files\SecuGen\SgiBioSrv,
+echo   reiniciar y volver a correr instalar.bat.
 echo.
 echo SOPORTE: SmartDom - smartdom.io
 ) > "%DEST%\LEER_PRIMERO.txt"
