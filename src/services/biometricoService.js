@@ -7,6 +7,24 @@ const WEBAPI_URL = 'https://localhost:8443'
 
 export const biometricoService = {
 
+  // Calentar la conexion con la WebAPI. La PRIMERA llamada a sgibiosrv tarda
+  // ~12 s (handshake TLS + renegociacion) y las siguientes ~40 ms. Si esa
+  // primera la paga el usuario, se come 12 s de spinner al abrir el kiosco o
+  // el modal de enrolamiento. Llamando esto al arrancar la app, el costo se
+  // paga en segundo plano y para el usuario todo responde al instante.
+  // Idempotente: se puede llamar muchas veces, calienta una sola vez.
+  _calentando: null,
+  calentar() {
+    if (!this._calentando) {
+      this._calentando = fetch(`${WEBAPI_URL}/SGIMatchScore`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({})
+      }).catch(() => {})   // si falla no importa: es solo calentamiento
+    }
+    return this._calentando
+  },
+
   // Verificar que el servicio estÃ¡ corriendo â€” usa SGIMatchScore sin params,
   // responde instantÃ¡neo sin intentar capturar ninguna huella
   // La WebAPI de SecuGen tarda ~12 s en responder la PRIMERA llamada (handshake
@@ -14,6 +32,10 @@ export const biometricoService = {
   // malformadas en llamadas alternadas al reusar la conexion. Por eso: timeout
   // amplio y un reintento antes de darla por caida.
   async verificarServicio({ timeoutMs = 15000, reintentos = 1 } = {}) {
+    // Si hay un calentamiento en curso, esperarlo antes de preguntar: evita
+    // abrir dos conexiones en paralelo, que es lo que dispara las respuestas
+    // malformadas de la WebAPI.
+    await this.calentar()
     for (let intento = 0; intento <= reintentos; intento++) {
       try {
         await fetch(`${WEBAPI_URL}/SGIMatchScore`, {
