@@ -25,8 +25,8 @@ export const biometricoService = {
     return this._calentando
   },
 
-  // Verificar que el servicio estÃ¡ corriendo â€” usa SGIMatchScore sin params,
-  // responde instantÃ¡neo sin intentar capturar ninguna huella
+  // Verificar que el servicio esta corriendo: usa SGIMatchScore sin params,
+  // responde sin intentar capturar ninguna huella.
   // La WebAPI de SecuGen tarda ~12 s en responder la PRIMERA llamada (handshake
   // TLS + renegociacion) y despues ~40 ms. Ademas devuelve respuestas
   // malformadas en llamadas alternadas al reusar la conexion. Por eso: timeout
@@ -79,7 +79,7 @@ export const biometricoService = {
       })
       const text = await response.text()
       if (!text) {
-        return { success: false, error: 'No se detectÃ³ ningÃºn dedo. ApoyÃ¡ el dedo en el lector.' }
+        return { success: false, error: 'No se detecto ningun dedo. Apoya el dedo en el lector.' }
       }
       const data = JSON.parse(text)
       if (data.ErrorCode !== 0) {
@@ -87,7 +87,7 @@ export const biometricoService = {
       }
       return { success: true, template: data.TemplateBase64, imagen: data.BMPBase64 || null }
     } catch {
-      return { success: false, error: 'Error al capturar. IntentÃ¡ de nuevo.' }
+      return { success: false, error: 'Error al capturar. Intenta de nuevo.' }
     }
   },
 
@@ -234,8 +234,12 @@ export const biometricoService = {
       const cap = await this.capturarHuella(timeoutMs)
       if (!cap.success) return { success: false, error: cap.error, tomaFallida: i + 1 }
       capturas.push(cap)
-      if (onProgreso && i < tomas - 1) onProgreso(i + 1, tomas, 'Levantá el dedo y volvé a apoyarlo')
-      await new Promise(r => setTimeout(r, 700))
+      // Pausa entre tomas. Importante: el lector espera una presion NUEVA, asi
+      // que si la siguiente captura arranca con el dedo todavia apoyado se
+      // queda esperando y corta por timeout (codigo 54). 700 ms no alcanzaban
+      // para levantar el dedo; 2 s si, y no se siente lento.
+      if (onProgreso && i < tomas - 1) onProgreso(i + 1, tomas, 'Levantá el dedo del lector...')
+      await new Promise(r => setTimeout(r, 2000))
     }
 
     // Score cruzado de cada captura contra las demas. La que tiene mejor
@@ -346,11 +350,20 @@ export const biometricoService = {
 
   traducirError(codigo) {
     const errores = {
-      10004: 'No se detectÃ³ ningÃºn dedo. ApoyÃ¡ el dedo en el lector.',
-      10005: 'Tiempo de espera agotado. IntentÃ¡ de nuevo.',
-      10006: 'Calidad insuficiente. ApoyÃ¡ el dedo con mÃ¡s firmeza.',
-      10007: 'Lector no encontrado. VerificÃ¡ que estÃ© conectado.',
+      // Codigos de la WebAPI
+      10004: 'No se detecto ningun dedo. Apoya el dedo en el lector.',
+      10005: 'Tiempo de espera agotado. Intenta de nuevo.',
+      10006: 'Calidad insuficiente. Apoya el dedo con mas firmeza.',
+      10007: 'Lector no encontrado. Verifica que este conectado.',
+      // Codigos de la libreria SGFDx (los devuelve el lector, no la WebAPI)
+      51: 'El lector no pudo iniciar. Desenchufalo y volve a enchufarlo.',
+      52: 'No se pudo inicializar el lector. Reinicia la PC.',
+      53: 'Se corto la conexion con el lector. Revisa el cable USB.',
+      54: 'No se apoyo el dedo a tiempo. Levanta el dedo y volve a apoyarlo.',
+      55: 'Lector no encontrado. Verifica que este conectado.',
+      58: 'Lector no compatible.',
+      60: 'El lector ya esta en uso por otro programa. Cerra el otro kiosco.',
     }
-    return errores[codigo] || `Error del lector (cÃ³digo ${codigo})`
+    return errores[codigo] || `Error del lector (codigo ${codigo})`
   }
 }
