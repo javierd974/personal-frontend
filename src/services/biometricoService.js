@@ -9,22 +9,43 @@ export const biometricoService = {
 
   // Verificar que el servicio estÃ¡ corriendo â€” usa SGIMatchScore sin params,
   // responde instantÃ¡neo sin intentar capturar ninguna huella
-  async verificarServicio() {
-    try {
-      const response = await fetch(`${WEBAPI_URL}/SGIMatchScore`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({}),
-        signal: AbortSignal.timeout(3000)
-      })
-      return { activo: true }
-    } catch {
-      return { activo: false }
+  // La WebAPI de SecuGen tarda ~12 s en responder la PRIMERA llamada (handshake
+  // TLS + renegociacion) y despues ~40 ms. Ademas devuelve respuestas
+  // malformadas en llamadas alternadas al reusar la conexion. Por eso: timeout
+  // amplio y un reintento antes de darla por caida.
+  async verificarServicio({ timeoutMs = 15000, reintentos = 1 } = {}) {
+    for (let intento = 0; intento <= reintentos; intento++) {
+      try {
+        await fetch(`${WEBAPI_URL}/SGIMatchScore`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({}),
+          signal: AbortSignal.timeout(timeoutMs)
+        })
+        return { activo: true }
+      } catch {
+        if (intento === reintentos) return { activo: false }
+        await new Promise(r => setTimeout(r, 400))
+      }
     }
+    return { activo: false }
   },
 
-  // Capturar una huella y devolver el template ISO en base64
+  // Capturar una huella y devolver el template ISO en base64.
+  // Wrapper con reintento: la WebAPI devuelve respuestas malformadas en llamadas
+  // alternadas, lo que hacia que el kiosco mostrara "Lector desconectado" con el
+  // lector perfectamente enchufado. Solo reintenta si el fallo fue RAPIDO (<1500 ms):
+  // un fallo lento es un timeout real esperando el dedo, y ahi no hay que reintentar.
   async capturarHuella(timeoutMs = 15000) {
+    const t0 = Date.now()
+    const primera = await this._capturarHuellaUnaVez(timeoutMs)
+    if (primera.success) return primera
+    if (Date.now() - t0 >= 1500) return primera
+    await new Promise(r => setTimeout(r, 300))
+    return this._capturarHuellaUnaVez(timeoutMs)
+  },
+
+  async _capturarHuellaUnaVez(timeoutMs = 15000) {
     try {
       const response = await fetch(`${WEBAPI_URL}/SGIFPCapture`, {
         method: 'POST',
