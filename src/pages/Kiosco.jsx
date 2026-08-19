@@ -56,6 +56,23 @@ export default function Kiosco() {
   useEffect(() => { localIdRef.current = localId }, [localId])
   useEffect(() => { dniRef.current = dni }, [dni])
 
+  // Teclado físico de la PC: 0-9 escriben el DNI, Backspace borra, Delete/Esc limpian.
+  // Solo activo en LISTO (igual que el teclado en pantalla).
+  useEffect(() => {
+    const onKey = (e) => {
+      if (estado !== ESTADOS.LISTO) return
+      if (e.key.length === 1 && e.key >= '0' && e.key <= '9') {
+        setDni(prev => (prev + e.key).slice(0, 10)); e.preventDefault()
+      } else if (e.key === 'Backspace') {
+        setDni(prev => prev.slice(0, -1)); e.preventDefault()
+      } else if (e.key === 'Delete' || e.key === 'Escape') {
+        setDni(''); e.preventDefault()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [estado])
+
   // Cargar local guardado (localStorage o ?local= en la URL)
   useEffect(() => {
     const lidGuardado = localStorage.getItem(STORAGE_KEY)
