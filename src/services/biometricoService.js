@@ -301,6 +301,21 @@ export const biometricoService = {
     } catch { /* el logging nunca debe romper un fichaje */ }
   },
 
+  // Verificación 1:1: huellas de un DNI puntual (rápido). Devuelve filas
+  // {empleado_id, nombre, apellido, rol_id, documento, dedo, template_iso}.
+  // 0 filas = DNI inexistente; filas con template_iso null = sin huella enrolada.
+  async getHuellasPorDni(dni) {
+    const { createClient } = await import('@supabase/supabase-js')
+    const supabaseAnon = createClient(
+      import.meta.env.VITE_SUPABASE_URL,
+      import.meta.env.VITE_SUPABASE_ANON_KEY
+    )
+    const p_dni = String(dni || '').replace(/\D/g, '')
+    const { data, error } = await supabaseAnon.rpc('huellas_por_dni', { p_dni })
+    if (error) return { success: false, error: error.message }
+    return { success: true, data: data || [] }
+  },
+
   // Estado de enrolamiento por local (RPC): devuelve [{empleado_id, dedo}] sin templates.
   async getEstadoHuellasLocal(localId) {
     const { supabase } = await import('./supabase')
