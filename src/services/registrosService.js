@@ -1,6 +1,12 @@
 import { supabase, handleSupabaseError, getCurrentUser } from './supabase'
 import { format } from 'date-fns'
 
+// Minutos que deben pasar entre dos marcaciones (entrada o salida) del MISMO
+// empleado. Es el mismo valor que aplica el trigger validar_cooldown_marcacion
+// en la base: aca se pre-valida solo para dar un mensaje claro antes de escribir.
+// Si se cambia uno hay que cambiar el otro.
+export const COOLDOWN_MINUTOS = 5
+
 export const registrosService = {
   // Obtener fecha del turno activo (considera turnos que cruzan medianoche)
   async getFechaTurnoActivo(localId) {
@@ -27,8 +33,12 @@ export const registrosService = {
     try {
       const user = await getCurrentUser()
       
-      // Verificar que el empleado no tenga una entrada sin salida EN CUALQUIER LOCAL
-      const { data: registroActivo, error: checkError } = await supabase
+      // Verificar que el empleado no tenga una entrada sin salida EN CUALQUIER
+      // LOCAL y de CUALQUIER FECHA (un turno abierto de otro dia tambien bloquea).
+      // Se usa limit(1) en vez de maybeSingle(): si por un arrastre historico hay
+      // mas de un turno abierto, maybeSingle() reventaba con un error de multiples
+      // filas en lugar de avisar que hay un turno abierto.
+      const { data: abiertos, error: checkError } = await supabase
         .from('registros_horarios')
         .select(`
           *,
@@ -36,9 +46,11 @@ export const registrosService = {
         `)
         .eq('empleado_id', empleadoId)
         .is('hora_salida', null)
-        .maybeSingle()
+        .order('hora_entrada', { ascending: false })
+        .limit(1)
       
       if (checkError) throw checkError
+      const registroActivo = abiertos && abiertos[0]
       
       if (registroActivo) {
         const localNombre = registroActivo.local?.nombre || 'otro local'
@@ -301,20 +313,70 @@ export const registrosService = {
 
   // Verificar si un empleado puede registrar entrada
   async puedeRegistrarEntrada(empleadoId) {
+    const result = await this.getRegistroAbierto(empleadoId)
+    if (!result.success) return result
+    return { success: true, puede: !result.data, registroActivo: result.data }
+  },
+
+  // Turno abierto del empleado en CUALQUIER local y de CUALQUIER fecha.
+  // Sin filtro por fecha a proposito: un ingreso que quedo abierto de otro dia
+  // igual impide una entrada nueva, y lo que corresponde es cerrarlo (salida).
+  // Devuelve data = null si no tiene ninguno.
+  async getRegistroAbierto(empleadoId) {
     try {
       const { data, error } = await supabase
         .from('registros_horarios')
-        .select('id, local:locales(nombre), hora_entrada')
+        .select('id, fecha, hora_entrada, local_id, local:locales(nombre), rol:roles(nombre)')
         .eq('empleado_id', empleadoId)
         .is('hora_salida', null)
-        .maybeSingle()
+        .order('hora_entrada', { ascending: false })
+        .limit(1)
       
       if (error) throw error
       
-      return { 
-        success: true, 
-        puede: !data,
-        registroActivo: data 
+      return { success: true, data: (data && data[0]) || null }
+    } catch (error) {
+      return { success: false, error: handleSupabaseError(error) }
+    }
+  },
+
+  // Pre-validacion del cooldown: replica lo que hace el trigger
+  // validar_cooldown_marcacion, mirando la ultima marcacion (entrada O salida)
+  // del empleado en las ultimas 24 hs. Es solo para avisar antes de escribir;
+  // la base sigue siendo la autoridad final.
+  async verificarCooldown(empleadoId) {
+    try {
+      const ahora = Date.now()
+      const desde = new Date(ahora - 24 * 60 * 60 * 1000).toISOString()
+      const { data, error } = await supabase
+        .from('registros_horarios')
+        .select('hora_entrada, hora_salida')
+        .eq('empleado_id', empleadoId)
+        .gte('hora_entrada', desde)
+      
+      if (error) throw error
+      
+      let ultima = null
+      for (const r of data || []) {
+        for (const t of [r.hora_entrada, r.hora_salida]) {
+          if (!t) continue
+          const ms = new Date(t).getTime()
+          if (ms > ahora) continue          // marcaciones futuras no cuentan
+          if (ultima === null || ms > ultima) ultima = ms
+        }
+      }
+      
+      if (ultima === null) return { success: true, puede: true }
+      
+      const cooldownMs = COOLDOWN_MINUTOS * 60 * 1000
+      const transcurrido = ahora - ultima
+      if (transcurrido >= cooldownMs) return { success: true, puede: true }
+      
+      return {
+        success: true,
+        puede: false,
+        faltan: Math.max(Math.ceil((cooldownMs - transcurrido) / 60000), 1),
+        ultima: new Date(ultima)
       }
     } catch (error) {
       return { success: false, error: handleSupabaseError(error) }
