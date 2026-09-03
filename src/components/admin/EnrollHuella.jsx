@@ -18,6 +18,9 @@ const CALIDAD_MINIMA = 120
 
 const EnrollHuella = ({ empleado, onAlert, onClose }) => {
   const [servicioActivo, setServicioActivo]       = useState(null)
+  // Detalle del chequeo: distingue "servicio caido" de "servicio OK pero sin
+  // lector", que es el caso que antes se mostraba como todo bien.
+  const [detalleServicio, setDetalleServicio]     = useState('')
   const [huellasRegistradas, setHuellasRegistradas] = useState([])
   const [dedoSeleccionado, setDedoSeleccionado]   = useState('indice_derecho')
   const [estado, setEstado]                        = useState('idle')
@@ -33,6 +36,7 @@ const EnrollHuella = ({ empleado, onAlert, onClose }) => {
       biometricoService.getHuellasEmpleado(empleado.id)
     ])
     setServicioActivo(servicioResult.activo)
+    setDetalleServicio(servicioResult.mensaje || '')
     if (huellasResult.success) setHuellasRegistradas(huellasResult.data)
   }
 
@@ -125,9 +129,9 @@ const EnrollHuella = ({ empleado, onAlert, onClose }) => {
       )}
       {servicioActivo === false && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-800 font-medium text-sm">⚠️ Servicio biométrico no activo en esta PC.</p>
+          <p className="text-red-800 font-medium text-sm">⚠️ El lector no está listo en esta PC.</p>
           <p className="text-red-600 text-xs mt-1">
-            Verificá que el lector SecuGen esté conectado y que el servicio <strong>SgiBioSrv</strong> (https://localhost:8443) esté corriendo. Si recién arrancaste la PC, esperá unos segundos e intentá de nuevo.
+            {detalleServicio || 'Verificá que el lector SecuGen esté conectado y que el servicio SgiBioSrv (https://localhost:8443) esté corriendo.'}
           </p>
         </div>
       )}

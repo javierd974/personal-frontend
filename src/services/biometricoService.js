@@ -1,9 +1,25 @@
-﻿// Llamada directa al WebAPI de SecuGen (servicio local SgiBioSrv, version "over HTTPS").
+// Llamada directa al WebAPI de SecuGen (servicio local SgiBioSrv, version "over HTTPS").
 // Responde en https://localhost:8443. Requiere el certificado sgca.crt instalado en la
 // raiz de confianza de Windows (lo hace el instalador). Se usa el hostname 'localhost'
 // —no 127.0.0.1— porque el certificado esta emitido para 'localhost'.
 // Al servirse la app por HTTPS en produccion, esto evita el bloqueo por "mixed content".
 const WEBAPI_URL = 'https://localhost:8443'
+
+// Codigos de error del lector (SGFDx) y de la WebAPI, clasificados por lo que
+// dicen sobre el DISPOSITIVO —no sobre el dedo—. Sirven para saber si hay un
+// lector realmente enchufado y funcionando:
+//   PRESENTE: la WebAPI pudo ABRIR el lector; el fallo es del dedo (timeout,
+//             calidad, no se apoyo, lector ocupado por otro programa).
+//   AUSENTE : no hay lector, o el driver no esta instalado / esta en error.
+const COD_LECTOR_PRESENTE = [0, 54, 60, 10004, 10005, 10006]
+const COD_LECTOR_AUSENTE  = [51, 52, 53, 55, 58, 10007]
+
+// true = hay lector; false = no hay; null = el codigo no dice nada concluyente.
+function lectorSegunCodigo(codigo) {
+  if (COD_LECTOR_PRESENTE.indexOf(codigo) !== -1) return true
+  if (COD_LECTOR_AUSENTE.indexOf(codigo) !== -1) return false
+  return null
+}
 
 export const biometricoService = {
 
@@ -25,32 +41,81 @@ export const biometricoService = {
     return this._calentando
   },
 
-  // Verificar que el servicio esta corriendo: usa SGIMatchScore sin params,
-  // responde sin intentar capturar ninguna huella.
-  // La WebAPI de SecuGen tarda ~12 s en responder la PRIMERA llamada (handshake
-  // TLS + renegociacion) y despues ~40 ms. Ademas devuelve respuestas
-  // malformadas en llamadas alternadas al reusar la conexion. Por eso: timeout
-  // amplio y un reintento antes de darla por caida.
-  async verificarServicio({ timeoutMs = 15000, reintentos = 1 } = {}) {
-    // Si hay un calentamiento en curso, esperarlo antes de preguntar: evita
-    // abrir dos conexiones en paralelo, que es lo que dispara las respuestas
-    // malformadas de la WebAPI.
+  // Verificar que la PC esta lista para capturar. OJO: no alcanza con que el
+  // servicio conteste.
+  //
+  // BUG HISTORICO: antes esto solo hacia un fetch a SGIMatchScore y devolvia
+  // activo:true si el fetch no explotaba. Pero sgibiosrv contesta igual sin
+  // ningun lector enchufado y sin el driver instalado, asi que la app mostraba
+  // "Lector conectado" en verde en maquinas donde el lector no funcionaba, y
+  // no reaccionaba a ningun dedo. El diagnostico del instalador decia
+  // FALTA_LECTOR al mismo tiempo que la app decia OK.
+  //
+  // Ahora se pregunta por el DISPOSITIVO: SGIFPCapture con Timeout=1 ms obliga
+  // a la WebAPI a abrir el lector y responde en ~250 ms sin esperar ningun
+  // dedo. El ErrorCode que vuelve dice si el lector esta o no (ver
+  // lectorSegunCodigo). Devuelve { servicio, lector, codigo, mensaje }.
+  async verificarLector({ timeoutMs = 10000, reintentos = 1 } = {}) {
     await this.calentar()
+    let ultimoCodigo = null
     for (let intento = 0; intento <= reintentos; intento++) {
       try {
-        await fetch(`${WEBAPI_URL}/SGIMatchScore`, {
+        const response = await fetch(`${WEBAPI_URL}/SGIFPCapture`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({}),
+          body: new URLSearchParams({
+            Timeout: '1', Quality: '50', templateFormat: 'ISO', licstr: '', serialNumber: ''
+          }),
           signal: AbortSignal.timeout(timeoutMs)
         })
-        return { activo: true }
+        const text = await response.text()
+        // Respuesta vacia o malformada: la WebAPI hace esto al reusar la
+        // conexion. Reintentar antes de opinar sobre el lector.
+        if (!text) { await new Promise(r => setTimeout(r, 400)); continue }
+        let data
+        try { data = JSON.parse(text) } catch { await new Promise(r => setTimeout(r, 400)); continue }
+        ultimoCodigo = data.ErrorCode
+        const presente = lectorSegunCodigo(data.ErrorCode)
+        if (presente === null) { await new Promise(r => setTimeout(r, 400)); continue }
+        // Un "no hay lector" se confirma con un segundo intento: con Timeout=1 ms
+        // una PC lenta puede tardar mas en abrir el dispositivo la primera vez, y
+        // no queremos marcar el lector como desconectado por eso.
+        if (presente === false && intento < reintentos) {
+          await new Promise(r => setTimeout(r, 600)); continue
+        }
+        return {
+          servicio: true,
+          lector: presente,
+          codigo: data.ErrorCode,
+          mensaje: presente
+            ? 'Lector conectado y listo.'
+            : 'El servicio esta corriendo pero no encuentra el lector. Revisa que este enchufado (USB trasero, sin hub) y que el driver SecuGen este instalado: corre reparar_driver.bat como administrador.'
+        }
       } catch {
-        if (intento === reintentos) return { activo: false }
+        // No se pudo llegar al servicio: puede estar apagado, escuchando en
+        // 8000 en vez de 8443, o faltar el certificado sgca.crt en la raiz de
+        // confianza (el instalador lo pone; si fallo certmgr.exe, no esta).
+        if (intento === reintentos) {
+          return {
+            servicio: false, lector: false, codigo: null,
+            mensaje: 'No se pudo conectar al servicio biometrico local (https://localhost:8443). Puede estar apagado, haber quedado en el puerto 8000, o faltar el certificado sgca.crt. Corre diagnostico.bat como administrador.'
+          }
+        }
         await new Promise(r => setTimeout(r, 400))
       }
     }
-    return { activo: false }
+    // El servicio contesta pero no se pudo determinar el estado del lector.
+    return {
+      servicio: true, lector: false, codigo: ultimoCodigo,
+      mensaje: 'El servicio contesta pero no se pudo confirmar el lector. Corre diagnostico.bat en esta PC.'
+    }
+  },
+
+  // Compatibilidad: activo = servicio arriba Y lector presente. Es lo que
+  // corresponde para habilitar el boton de capturar.
+  async verificarServicio(opts = {}) {
+    const r = await this.verificarLector(opts)
+    return { activo: r.servicio && r.lector, ...r }
   },
 
   // Capturar una huella y devolver el template ISO en base64.
@@ -79,15 +144,18 @@ export const biometricoService = {
       })
       const text = await response.text()
       if (!text) {
-        return { success: false, error: 'No se detecto ningun dedo. Apoya el dedo en el lector.' }
+        return { success: false, codigo: null, lector: null, error: 'No se detecto ningun dedo. Apoya el dedo en el lector.' }
       }
       const data = JSON.parse(text)
       if (data.ErrorCode !== 0) {
-        return { success: false, error: this.traducirError(data.ErrorCode) }
+        // Se propaga el codigo: el kiosco lo usa para saber si el fallo fue del
+        // dedo (lector OK) o del dispositivo (lector desenchufado / sin driver).
+        return { success: false, codigo: data.ErrorCode, lector: lectorSegunCodigo(data.ErrorCode), error: this.traducirError(data.ErrorCode) }
       }
-      return { success: true, template: data.TemplateBase64, imagen: data.BMPBase64 || null }
+      return { success: true, codigo: 0, lector: true, template: data.TemplateBase64, imagen: data.BMPBase64 || null }
     } catch {
-      return { success: false, error: 'Error al capturar. Intenta de nuevo.' }
+      // No se llego al servicio: no se puede opinar sobre el lector.
+      return { success: false, codigo: null, lector: null, error: 'Error al capturar. Intenta de nuevo.' }
     }
   },
 

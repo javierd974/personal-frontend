@@ -45,7 +45,10 @@ export default function Kiosco() {
   const [localNombre, setLocalNombre]     = useState('')
   const [locales, setLocales]             = useState([])
   const [eligiendoLocal, setEligiendoLocal] = useState(false)
-  const [lectorActivo, setLectorActivo]   = useState(true)
+  // null = todavia no se sabe (se resuelve con el sondeo al arrancar el loop).
+  // No arranca en true: antes el indicador nacia en verde y se quedaba en verde
+  // en PCs donde el lector no estaba instalado.
+  const [lectorActivo, setLectorActivo]   = useState(null)
 
   const loopTokenRef = useRef(0)     // token del loop activo (evita loops duplicados)
   const localIdRef = useRef(null)    // localId siempre actualizado para el loop
@@ -118,6 +121,14 @@ export default function Kiosco() {
   // ── Loop principal de captura ──────────────────────────────────────────────
   const loopCaptura = async (token) => {
     let fallosRapidos = 0
+
+    // Sondeo inicial del DISPOSITIVO (~250 ms): sin esto el indicador tendria
+    // que esperar a que alguien apoye un dedo para saber si hay lector, y en
+    // una PC sin lector se quedaria mostrando "conectado" indefinidamente.
+    const sondeo = await biometricoService.verificarLector()
+    if (loopTokenRef.current !== token) return
+    setLectorActivo(sondeo.servicio && sondeo.lector)
+
     while (loopTokenRef.current === token) {
       const t0 = Date.now()
       let cap
@@ -127,8 +138,20 @@ export default function Kiosco() {
 
       if (!cap.success) {
         const elapsed = Date.now() - t0
-        if (elapsed < 1500) { fallosRapidos++ } else { fallosRapidos = 0 }
-        setLectorActivo(fallosRapidos < 3)
+        // cap.lector viene del ErrorCode del lector: true = el fallo fue del
+        // dedo (timeout, calidad) asi que el dispositivo esta; false = no hay
+        // lector o el driver no esta instalado; null = no concluyente (servicio
+        // caido o respuesta vacia) y ahi vale el heuristico de fallos rapidos.
+        if (cap.lector === true) {
+          fallosRapidos = 0
+          setLectorActivo(true)
+        } else if (cap.lector === false) {
+          fallosRapidos = 3
+          setLectorActivo(false)
+        } else {
+          if (elapsed < 1500) { fallosRapidos++ } else { fallosRapidos = 0 }
+          setLectorActivo(fallosRapidos < 3)
+        }
         await sleep(elapsed < 1500 ? 1200 : 300)
         continue
       }
@@ -337,9 +360,11 @@ export default function Kiosco() {
       <footer style={estilos.footer}>
         <span style={{display:'inline-flex', alignItems:'center', gap:'8px'}}>
           <span style={{ width:'8px', height:'8px', borderRadius:'50%',
-            background: lectorActivo ? '#22c55e' : '#ef4444',
+            background: lectorActivo === null ? '#94a3b8' : lectorActivo ? '#22c55e' : '#ef4444',
             boxShadow: lectorActivo ? '0 0 8px #22c55e88' : 'none' }} />
-          {lectorActivo ? 'Lector conectado' : 'Lector desconectado — verificá el dispositivo'}
+          {lectorActivo === null
+            ? 'Verificando lector...'
+            : lectorActivo ? 'Lector conectado' : 'Lector desconectado — verificá el dispositivo'}
           <span style={{color:'#1e293b'}}>·</span> SmartDom · Sistema Biométrico
         </span>
       </footer>
@@ -353,8 +378,10 @@ function DisplayEstado({ estado, empleado, accion, mensaje, registro, lectorActi
   const rolNombre = empleado?.rol?.nombre || registro?.rol?.nombre || ''
   const horaAhora = new Date().toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit',hour12:false})
 
-  const listo = !lectorActivo
-    ? { icono:'⚠', titulo:'Lector desconectado', sub:'Revisá que el lector esté enchufado. Reintentando...', color:'#ef4444' }
+  const listo = lectorActivo === null
+    ? { icono:'⋯', titulo:'Verificando lector', sub:'Un momento...', color:'#64748b' }
+    : !lectorActivo
+    ? { icono:'⚠', titulo:'Lector desconectado', sub:'Revisá que el lector esté enchufado y que el driver SecuGen esté instalado.', color:'#ef4444' }
     : dniListo
       ? { icono:'☞', titulo:'Apoyá el dedo', sub:'Verificamos tu huella con el DNI ingresado', color:'#22c55e' }
       : { icono:'⌨', titulo:'Ingresá tu DNI', sub:'Usá el teclado y después apoyá el dedo', color:'#64748b' }
