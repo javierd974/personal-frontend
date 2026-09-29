@@ -10,6 +10,41 @@ const TIPO_CONTRATO = ['Permanente', 'Temporal', 'Pasantía', 'Contrato']
 const TIPO_CUENTA = ['Caja de Ahorro', 'Cuenta Corriente']
 const TURNOS = [{ v: 'TM', l: 'Mañana (TM)' }, { v: 'TN', l: 'Noche (TN)' }]
 
+// Campos obligatorios para el alta de personal
+const OBLIGATORIOS = {
+  nombre: 'Nombre',
+  apellido: 'Apellido',
+  cuil: 'CUIL',
+  fecha_nacimiento: 'Fecha de nacimiento',
+  estado_civil: 'Estado civil',
+  telefono: 'Teléfono',
+  email: 'Email',
+  direccion: 'Dirección',
+  rol_id: 'Puesto (rol)',
+  local_origen_id: 'Local donde se desempeña',
+  turno: 'Turno'
+}
+
+const validar = (form) => {
+  const faltan = Object.keys(OBLIGATORIOS).filter(c => !String(form[c] ?? '').trim())
+  if (faltan.length) {
+    return { campos: faltan, mensaje: `Completá los campos obligatorios: ${faltan.map(c => OBLIGATORIOS[c]).join(', ')}.` }
+  }
+  if (form.cuil.replace(/\D/g, '').length !== 11) {
+    return { campos: ['cuil'], mensaje: 'El CUIL debe tener 11 dígitos (ej: 20-12345678-9).' }
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+    return { campos: ['email'], mensaje: 'El email no tiene un formato válido.' }
+  }
+  if (form.telefono.replace(/\D/g, '').length < 8) {
+    return { campos: ['telefono'], mensaje: 'El teléfono debe tener al menos 8 dígitos.' }
+  }
+  if (form.fecha_nacimiento >= hoy()) {
+    return { campos: ['fecha_nacimiento'], mensaje: 'La fecha de nacimiento no es válida.' }
+  }
+  return null
+}
+
 const hoy = () => new Date().toISOString().split('T')[0]
 
 const formInicial = (alta, localId) => ({
@@ -63,6 +98,7 @@ const AltaEmpleadoModal = ({ isOpen, onClose, localId, onSuccess, onAlert }) => 
   const [roles, setRoles] = useState([])
   const [locales, setLocales] = useState([])
   const [error, setError] = useState(null)
+  const [invalidos, setInvalidos] = useState([])
 
   useEffect(() => {
     if (isOpen) {
@@ -92,13 +128,22 @@ const AltaEmpleadoModal = ({ isOpen, onClose, localId, onSuccess, onAlert }) => 
     setSeleccion(alta)
     setForm(formInicial(alta, localId))
     setError(null)
+    setInvalidos([])
   }
 
-  const set = (campo, valor) => setForm(prev => ({ ...prev, [campo]: valor }))
+  const set = (campo, valor) => {
+    setForm(prev => ({ ...prev, [campo]: valor }))
+    if (invalidos.includes(campo)) setInvalidos(prev => prev.filter(c => c !== campo))
+  }
+
+  // Resalta en rojo los campos obligatorios que fallaron la validación
+  const cls = (base, campo) => invalidos.includes(campo) ? `${base} border-red-400 ring-1 ring-red-300` : base
 
   const guardar = async () => {
     setError(null)
-    if (!form.rol_id) { setError('Seleccioná el puesto (rol).'); return }
+    const problema = validar(form)
+    if (problema) { setError(problema.mensaje); setInvalidos(problema.campos); return }
+    setInvalidos([])
     setSaving(true)
     const res = await altasService.cargarEmpleadoAutorizado(seleccion.solicitud_id, form)
     setSaving(false)
@@ -174,18 +219,18 @@ const AltaEmpleadoModal = ({ isOpen, onClose, localId, onSuccess, onAlert }) => 
 
       <Seccion titulo="Datos personales" />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <Field label="Nombre" required><input className="input-field" value={form.nombre} onChange={e => set('nombre', e.target.value)} /></Field>
-        <Field label="Apellido" required><input className="input-field" value={form.apellido} onChange={e => set('apellido', e.target.value)} /></Field>
+        <Field label="Nombre" required><input className={cls('input-field', 'nombre')} value={form.nombre} onChange={e => set('nombre', e.target.value)} /></Field>
+        <Field label="Apellido" required><input className={cls('input-field', 'apellido')} value={form.apellido} onChange={e => set('apellido', e.target.value)} /></Field>
         <Field label="DNI (autorizado)"><input className="input-field bg-gray-100 cursor-not-allowed" value={form.documento} readOnly /></Field>
-        <Field label="CUIL"><input className="input-field" value={form.cuil} onChange={e => set('cuil', e.target.value)} placeholder="20-12345678-9" /></Field>
-        <Field label="Fecha de nacimiento"><input type="date" className="input-field" value={form.fecha_nacimiento} onChange={e => set('fecha_nacimiento', e.target.value)} /></Field>
+        <Field label="CUIL" required><input className={cls('input-field', 'cuil')} value={form.cuil} onChange={e => set('cuil', e.target.value)} placeholder="20-12345678-9" /></Field>
+        <Field label="Fecha de nacimiento" required><input type="date" max={hoy()} className={cls('input-field', 'fecha_nacimiento')} value={form.fecha_nacimiento} onChange={e => set('fecha_nacimiento', e.target.value)} /></Field>
         <Field label="Sexo">
           <select className="select-field" value={form.sexo} onChange={e => set('sexo', e.target.value)}>
             <option value="">—</option>{SEXO.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </Field>
-        <Field label="Estado civil">
-          <select className="select-field" value={form.estado_civil} onChange={e => set('estado_civil', e.target.value)}>
+        <Field label="Estado civil" required>
+          <select className={cls('select-field', 'estado_civil')} value={form.estado_civil} onChange={e => set('estado_civil', e.target.value)}>
             <option value="">—</option>{ESTADO_CIVIL.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </Field>
@@ -195,9 +240,9 @@ const AltaEmpleadoModal = ({ isOpen, onClose, localId, onSuccess, onAlert }) => 
 
       <Seccion titulo="Contacto y domicilio" />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <Field label="Teléfono"><input className="input-field" value={form.telefono} onChange={e => set('telefono', e.target.value)} /></Field>
-        <Field label="Email"><input type="email" className="input-field" value={form.email} onChange={e => set('email', e.target.value)} /></Field>
-        <Field label="Dirección"><input className="input-field" value={form.direccion} onChange={e => set('direccion', e.target.value)} /></Field>
+        <Field label="Teléfono" required><input className={cls('input-field', 'telefono')} value={form.telefono} onChange={e => set('telefono', e.target.value)} /></Field>
+        <Field label="Email" required><input type="email" className={cls('input-field', 'email')} value={form.email} onChange={e => set('email', e.target.value)} /></Field>
+        <Field label="Dirección" required><input className={cls('input-field', 'direccion')} value={form.direccion} onChange={e => set('direccion', e.target.value)} /></Field>
         <Field label="Ciudad"><input className="input-field" value={form.ciudad} onChange={e => set('ciudad', e.target.value)} /></Field>
         <Field label="Provincia"><input className="input-field" value={form.provincia} onChange={e => set('provincia', e.target.value)} /></Field>
         <Field label="Código postal"><input className="input-field" value={form.codigo_postal} onChange={e => set('codigo_postal', e.target.value)} /></Field>
@@ -206,17 +251,17 @@ const AltaEmpleadoModal = ({ isOpen, onClose, localId, onSuccess, onAlert }) => 
       <Seccion titulo="Datos laborales" />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <Field label="Puesto (rol)" required>
-          <select className="select-field" value={form.rol_id} onChange={e => set('rol_id', e.target.value)}>
+          <select className={cls('select-field', 'rol_id')} value={form.rol_id} onChange={e => set('rol_id', e.target.value)}>
             <option value="">Seleccionar…</option>{roles.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}
           </select>
         </Field>
-        <Field label="Local de origen">
-          <select className="select-field" value={form.local_origen_id} onChange={e => set('local_origen_id', e.target.value)}>
+        <Field label="Local donde se desempeña" required>
+          <select className={cls('select-field', 'local_origen_id')} value={form.local_origen_id} onChange={e => set('local_origen_id', e.target.value)}>
             <option value="">—</option>{locales.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
           </select>
         </Field>
-        <Field label="Turno">
-          <select className="select-field" value={form.turno} onChange={e => set('turno', e.target.value)}>
+        <Field label="Turno" required>
+          <select className={cls('select-field', 'turno')} value={form.turno} onChange={e => set('turno', e.target.value)}>
             <option value="">—</option>{TURNOS.map(t => <option key={t.v} value={t.v}>{t.l}</option>)}
           </select>
         </Field>
