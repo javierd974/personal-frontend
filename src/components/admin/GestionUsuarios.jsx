@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { 
   UserPlus, 
   Mail, 
@@ -11,6 +11,7 @@ import {
   Trash2,
   Building,
   Save,
+  Search,
   X
 } from 'lucide-react'
 import { adminService } from '../../services/adminService'
@@ -27,6 +28,7 @@ const GestionUsuarios = ({ onAlert }) => {
   const [modalAsignar, setModalAsignar] = useState(false)
   const [usuarioSeleccionado, setUsuarioSeleccionado] = useState(null)
   const [showPassword, setShowPassword] = useState(false)
+  const [busqueda, setBusqueda] = useState('')
 
   const [formCrear, setFormCrear] = useState({
     email: '',
@@ -260,6 +262,24 @@ const GestionUsuarios = ({ onAlert }) => {
     }
   }
 
+  // Ignora mayúsculas y acentos al buscar
+  const normalizar = (texto) =>
+    (texto || '').toString().normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+
+  // Filtrar por nombre, apellido, email o rol y ordenar por nombre
+  const usuariosFiltrados = useMemo(() => {
+    const terminos = normalizar(busqueda).split(/\s+/).filter(Boolean)
+    const filtrados = usuarios.filter(u => {
+      const texto = normalizar(`${u.nombre} ${u.apellido} ${u.email} ${getRolLabel(u.rol)}`)
+      return terminos.every(t => texto.includes(t))
+    })
+    return [...filtrados].sort((a, b) =>
+      `${a.nombre || ''} ${a.apellido || ''}`.localeCompare(
+        `${b.nombre || ''} ${b.apellido || ''}`, 'es', { sensitivity: 'base' }
+      )
+    )
+  }, [usuarios, busqueda])
+
   if (loading && usuarios.length === 0) {
     return <LoadingSpinner />
   }
@@ -281,6 +301,33 @@ const GestionUsuarios = ({ onAlert }) => {
           <UserPlus className="w-5 h-5" />
           Crear Usuario
         </button>
+      </div>
+
+      {/* Buscador */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <input
+            type="text"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            className="input-field pl-10 pr-10"
+            placeholder="Buscar por nombre, apellido, email o rol..."
+          />
+          {busqueda && (
+            <button
+              type="button"
+              onClick={() => setBusqueda('')}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              title="Limpiar búsqueda"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
+        </div>
+        <p className="text-sm text-gray-500">
+          {usuariosFiltrados.length} de {usuarios.length} usuarios
+        </p>
       </div>
 
       {/* Lista de usuarios */}
@@ -310,7 +357,14 @@ const GestionUsuarios = ({ onAlert }) => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {usuarios.map((usuario) => (
+              {usuariosFiltrados.length === 0 && (
+                <tr>
+                  <td colSpan="6" className="px-6 py-8 text-center text-sm text-gray-500">
+                    No hay usuarios que coincidan con "{busqueda}"
+                  </td>
+                </tr>
+              )}
+              {usuariosFiltrados.map((usuario) => (
                 <tr key={usuario.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">

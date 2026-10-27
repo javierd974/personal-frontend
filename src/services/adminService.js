@@ -14,10 +14,11 @@ export const adminService = {
           *,
           usuarios_locales(count)
         `)
+        .order('nombre', { ascending: true })
         .order('apellido', { ascending: true })
-      
+
       if (error) throw error
-      
+
       // Agregar conteo de locales
       const usuarios = data.map(usuario => ({
         ...usuario,
